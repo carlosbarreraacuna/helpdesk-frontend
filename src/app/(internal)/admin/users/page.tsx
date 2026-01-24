@@ -5,15 +5,48 @@ import api from '@/lib/api';
 import CreateUserModal from '@/components/CreateUserModal';
 import EditUserModal from '@/components/EditUserModal';
 import AssignRoleModal from '@/components/AssignRoleModal';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  UserCheck,
+  MoreHorizontal,
+} from "lucide-react";
 
 interface User {
   id: number;
   name: string;
+  username: string;
   email: string;
   phone?: string;
+  role_id: number;
+  area_id?: number;
   is_active: boolean;
   last_login?: string;
-  role: {
+  role?: {
     id: number;
     name: string;
     display_name: string;
@@ -61,6 +94,7 @@ export default function UsersPage() {
     area_id: '',
     is_active: '',
     page: 1,
+    per_page: 10,
   });
   
   // Modales
@@ -78,7 +112,7 @@ export default function UsersPage() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/users', { params: { ...filters, per_page: 10 } });
+      const response = await api.get('/users', { params: filters });
       setUsers(response.data.data);
       setPagination({
         current_page: response.data.current_page,
@@ -96,18 +130,24 @@ export default function UsersPage() {
   const loadRoles = async () => {
     try {
       const { data } = await api.get('/roles');
-      setRoles(data);
+      // Handle paginated response - extract data array
+      const rolesData = Array.isArray(data) ? data : data.data || [];
+      setRoles(rolesData);
     } catch (error) {
       console.error('Error loading roles:', error);
+      setRoles([]); // Set empty array on error
     }
   };
 
   const loadAreas = async () => {
     try {
       const { data } = await api.get('/areas');
-      setAreas(data);
+      // Handle paginated response - extract data array
+      const areasData = Array.isArray(data) ? data : data.data || [];
+      setAreas(areasData);
     } catch (error) {
       console.error('Error loading areas:', error);
+      setAreas([]); // Set empty array on error
     }
   };
 
@@ -147,228 +187,350 @@ export default function UsersPage() {
     setFilters({ ...filters, page });
   };
 
+  const handlePerPageChange = (perPage: number) => {
+    setFilters({ ...filters, per_page: perPage, page: 1 });
+  };
+
   const handleFilterChange = (newFilters: any) => {
-    setFilters({ ...newFilters, page: 1 }); // Reset to page 1 when filtering
+    // Convert "all" values back to empty strings for API
+    const processedFilters = { ...newFilters };
+    if (processedFilters.role_id === 'all') processedFilters.role_id = '';
+    if (processedFilters.area_id === 'all') processedFilters.area_id = '';
+    if (processedFilters.is_active === 'all') processedFilters.is_active = '';
+    
+    setFilters({ ...processedFilters, page: 1 });
+  };
+
+  // Pagination logic
+  const getPageNumbers = () => {
+    const { current_page, last_page } = pagination;
+    const delta = 2;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (
+      let i = Math.max(2, current_page - delta);
+      i <= Math.min(last_page - 1, current_page + delta);
+      i++
+    ) {
+      range.push(i);
+    }
+
+    if (current_page - delta > 2) {
+      rangeWithDots.push(1, '...');
+    } else {
+      rangeWithDots.push(1);
+    }
+
+    rangeWithDots.push(...range);
+
+    if (current_page + delta < last_page - 1) {
+      rangeWithDots.push('...', last_page);
+    } else {
+      rangeWithDots.push(last_page);
+    }
+
+    return rangeWithDots;
   };
 
   return (
-    <div className="">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Gestión de Usuarios</h1>
-          <p className="text-gray-600">Administra los usuarios del sistema</p>
+          <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
+          <p className="text-sm text-gray-600">Administra los usuarios del sistema</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          <span>➕</span>
+        <Button size="sm" onClick={() => setShowCreateModal(true)}>
+          <Plus className="mr-2 h-4 w-4" />
           Nuevo Usuario
-        </button>
+        </Button>
       </div>
 
-      {/* Filtros - Más compactos */}
-      <div className="bg-white rounded-lg shadow p-3 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+      {/* Filters */}
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <div className="relative">
-            <span className="absolute left-2 top-2 text-gray-400 text-sm">🔍</span>
-            <input
-              type="text"
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
               placeholder="Buscar usuario..."
-              className="w-full pl-7 pr-2 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               value={filters.search}
-              onChange={(e) => handleFilterChange({ ...filters, search: e.target.value })}
+              onChange={(e) => handleFilterChange({ ...filters, search: e.target.value.trim() })}
+              className="pl-8 h-9 text-sm"
             />
           </div>
 
-          <select
-            className="px-2 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            value={filters.role_id}
-            onChange={(e) => handleFilterChange({ ...filters, role_id: e.target.value })}
+          <Select
+            value={filters.role_id || undefined}
+            onValueChange={(value) => handleFilterChange({ ...filters, role_id: value })}
           >
-            <option value="">Todos los roles</option>
-            {roles.map(role => (
-              <option key={role.id} value={role.id}>{role.display_name}</option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Todos los roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los roles</SelectItem>
+              {roles.map(role => (
+                <SelectItem key={role.id} value={role.id.toString()}>
+                  {role.display_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            className="px-2 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            value={filters.area_id}
-            onChange={(e) => handleFilterChange({ ...filters, area_id: e.target.value })}
+          <Select
+            value={filters.area_id || undefined}
+            onValueChange={(value) => handleFilterChange({ ...filters, area_id: value })}
           >
-            <option value="">Todas las áreas</option>
-            {areas.map(area => (
-              <option key={area.id} value={area.id}>{area.name}</option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Todas las áreas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las áreas</SelectItem>
+              {areas.map(area => (
+                <SelectItem key={area.id} value={area.id.toString()}>
+                  {area.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <select
-            className="px-2 py-1.5 text-sm border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            value={filters.is_active}
-            onChange={(e) => handleFilterChange({ ...filters, is_active: e.target.value })}
+          <Select
+            value={filters.is_active || undefined}
+            onValueChange={(value) => handleFilterChange({ ...filters, is_active: value })}
           >
-            <option value="">Todos</option>
-            <option value="1">Activos</option>
-            <option value="0">Inactivos</option>
-          </select>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="1">Activos</SelectItem>
+              <SelectItem value="0">Inactivos</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <div className="text-sm text-gray-600 py-1.5">
+          <div className="text-xs text-gray-600 flex items-center">
             {pagination.total} usuarios
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Tabla de Usuarios - Más compacta */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-sm text-gray-600">Cargando...</p>
-          </div>
-        ) : (
-          <>
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rol</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Área</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Último acceso</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {users.map(user => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-blue-600 text-xs font-semibold">
-                            {user.name.charAt(0).toUpperCase()}
-                          </span>
+      {/* Users Table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="text-center py-6">
+              <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-xs text-gray-600">Cargando...</p>
+            </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50">
+                    <TableHead className="py-2 px-3 text-xs font-medium">Usuario</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium">Username</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium">Rol</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium">Área</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium">Estado</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium">Último acceso</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map(user => (
+                    <TableRow key={user.id} className="hover:bg-gray-50/50 border-b border-gray-100">
+                      <TableCell className="py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-blue-600 text-xs font-semibold">
+                              {user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      </TableCell>
+                      <TableCell className="py-2 px-3">
+                        <span className="text-xs text-gray-600 font-mono">
+                          {user.username}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2 px-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAssignRole(user)}
+                          className="h-7 text-xs px-2 flex items-center gap-1"
+                        >
+                          {(() => {
+                            if (user.role?.display_name) return user.role.display_name;
+                            if (user.role?.name) return user.role.name.charAt(0).toUpperCase() + user.role.name.slice(1);
+                            if (user.role_id) return `Rol ID: ${user.role_id}`;
+                            return 'Sin rol';
+                          })()}
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                      <TableCell className="py-2 px-3">
+                        <span className="text-xs text-gray-600">
+                          {user.area?.name || '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2 px-3">
+                        <Button
+                          variant={user.is_active ? "default" : "secondary"}
+                          size="sm"
+                          onClick={() => handleToggleStatus(user.id)}
+                          className={`h-7 text-xs px-2 ${
+                            user.is_active ? "bg-green-100 text-green-700 hover:bg-green-200 border-green-200" : ""
+                          }`}
+                        >
+                          {user.is_active ? 'Activo' : 'Inactivo'}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="py-2 px-3">
+                        <span className="text-xs text-gray-600">
+                          {user.last_login 
+                            ? new Date(user.last_login).toLocaleDateString('es-ES', { 
+                                day: '2-digit', 
+                                month: '2-digit',
+                                year: '2-digit'
+                              })
+                            : 'Nunca'
+                          }
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(user)}
+                            className="h-7 w-7 p-0"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(user.id)}
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => handleAssignRole(user)}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 cursor-pointer transition"
-                      >
-                        {user.role?.display_name || 'Sin rol'}
-                        <span className="text-xs">✏️</span>
-                      </button>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="text-xs text-gray-600">
-                        {user.area?.name || '-'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => handleToggleStatus(user.id)}
-                        className={`px-2 py-0.5 rounded text-xs font-medium transition ${
-                          user.is_active
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                            : 'bg-red-100 text-red-800 hover:bg-red-200'
-                        }`}
-                      >
-                        {user.is_active ? '✓ Activo' : '✗ Inactivo'}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-500">
-                      {user.last_login 
-                        ? new Date(user.last_login).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
-                        : 'Nunca'
-                      }
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => handleEdit(user)}
-                          className="text-blue-600 hover:text-blue-800 text-xs font-medium transition"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          className="text-red-600 hover:text-red-800 text-xs font-medium transition"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
-            {/* Paginación */}
-            {pagination.last_page > 1 && (
-              <div className="border-t border-gray-200 px-3 py-2 flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Mostrando <span className="font-medium">{(pagination.current_page - 1) * pagination.per_page + 1}</span> a{' '}
-                  <span className="font-medium">
-                    {Math.min(pagination.current_page * pagination.per_page, pagination.total)}
-                  </span>{' '}
-                  de <span className="font-medium">{pagination.total}</span> resultados
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handlePageChange(pagination.current_page - 1)}
-                    disabled={pagination.current_page === 1}
-                    className="px-2 py-1 text-xs border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Anterior
-                  </button>
-                  
-                  {/* Números de página */}
-                  {Array.from({ length: Math.min(5, pagination.last_page) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.last_page <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.current_page <= 3) {
-                      pageNum = i + 1;
-                    } else if (pagination.current_page >= pagination.last_page - 2) {
-                      pageNum = pagination.last_page - 4 + i;
-                    } else {
-                      pageNum = pagination.current_page - 2 + i;
-                    }
+              {/* Pagination */}
+              {pagination.last_page > 1 && (
+                <div className="border-t border-gray-100 p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-600">
+                      Mostrando{' '}
+                      <span className="font-medium">
+                        {(pagination.current_page - 1) * pagination.per_page + 1}
+                      </span>{' '}
+                      a{' '}
+                      <span className="font-medium">
+                        {Math.min(pagination.current_page * pagination.per_page, pagination.total)}
+                      </span>{' '}
+                      de{' '}
+                      <span className="font-medium">{pagination.total}</span> resultados
+                    </div>
                     
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        className={`px-2 py-1 text-xs border rounded ${
-                          pagination.current_page === pageNum
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                  
-                  <button
-                    onClick={() => handlePageChange(pagination.current_page + 1)}
-                    disabled={pagination.current_page === pagination.last_page}
-                    className="px-2 py-1 text-xs border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Siguiente
-                  </button>
+                    <div className="flex items-center gap-2">
+                      {/* Rows per page */}
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-gray-600">Filas:</span>
+                        <Select
+                          value={pagination.per_page.toString()}
+                          onValueChange={(value) => handlePerPageChange(Number(value))}
+                        >
+                          <SelectTrigger className="w-14 h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Page navigation */}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(1)}
+                          disabled={pagination.current_page === 1}
+                          className="h-7 w-7 p-0"
+                        >
+                          <ChevronsLeft className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(pagination.current_page - 1)}
+                          disabled={pagination.current_page === 1}
+                          className="h-7 w-7 p-0"
+                        >
+                          <ChevronLeft className="h-3 w-3" />
+                        </Button>
+                        
+                        {/* Page numbers */}
+                        {getPageNumbers().map((pageNum, index) => (
+                          pageNum === '...' ? (
+                            <span key={index} className="px-1 text-xs text-gray-500">
+                              ...
+                            </span>
+                          ) : (
+                            <Button
+                              key={index}
+                              variant={pagination.current_page === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(pageNum as number)}
+                              className="h-7 w-7 p-0 text-xs"
+                            >
+                              {pageNum}
+                            </Button>
+                          )
+                        ))}
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(pagination.current_page + 1)}
+                          disabled={pagination.current_page === pagination.last_page}
+                          className="h-7 w-7 p-0"
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(pagination.last_page)}
+                          disabled={pagination.current_page === pagination.last_page}
+                          className="h-7 w-7 p-0"
+                        >
+                          <ChevronsRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Modales */}
       <CreateUserModal

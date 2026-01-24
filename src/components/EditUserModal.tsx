@@ -6,6 +6,7 @@ import api from '@/lib/api';
 interface User {
   id: number;
   name: string;
+  username: string;
   email: string;
   phone?: string;
   role_id: number;
@@ -37,6 +38,7 @@ interface EditUserModalProps {
 export default function EditUserModal({ isOpen, onClose, onSuccess, user, roles, areas }: EditUserModalProps) {
   const [formData, setFormData] = useState({
     name: '',
+    username: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -52,6 +54,7 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user, roles,
     if (isOpen && user) {
       setFormData({
         name: user.name,
+        username: user.username,
         email: user.email,
         password: '',
         password_confirmation: '',
@@ -72,6 +75,7 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user, roles,
     try {
       const updateData: any = {
         name: formData.name,
+        username: formData.username,
         email: formData.email,
         role_id: formData.role_id,
         area_id: formData.area_id || null,
@@ -121,16 +125,28 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user, roles,
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Email *</label>
+              <label className="block text-sm font-medium mb-1">Username *</label>
               <input
-                type="email"
+                type="text"
                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                value={formData.username}
+                onChange={(e) => setFormData({...formData, username: e.target.value})}
                 required
               />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email[0]}</p>}
+              {errors.username && <p className="text-red-500 text-xs mt-1">{errors.username[0]}</p>}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Email *</label>
+            <input
+              type="email"
+              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              required
+            />
+            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email[0]}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

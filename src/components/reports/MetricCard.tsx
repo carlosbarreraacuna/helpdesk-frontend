@@ -7,6 +7,7 @@ import { Report, MetricData } from '@/types/reports';
 export default function MetricCard({ metric, filters }: { metric: Report; filters: any }) {
   const [data, setData] = useState<MetricData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -14,12 +15,39 @@ export default function MetricCard({ metric, filters }: { metric: Report; filter
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const endpoint = metric.config.endpoint;
+      console.log('Loading metric:', metric.name, 'from endpoint:', endpoint);
+      console.log('Filters:', filters);
+      
       const { data } = await api.get(endpoint, { params: filters });
+      console.log('Metric data received:', data);
       setData(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading metric:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        endpoint: metric.config.endpoint,
+        filters: filters
+      });
+      
+      // Set error message for display
+      let errorMessage = 'Error al cargar métrica';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Error del servidor';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Sin permisos';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Endpoint no encontrado';
+      }
+      
+      setError(errorMessage);
     }
     setLoading(false);
   };
@@ -50,6 +78,11 @@ export default function MetricCard({ metric, filters }: { metric: Report; filter
           <p className="text-sm text-gray-600 mb-2">{metric.name}</p>
           {loading ? (
             <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+          ) : error ? (
+            <div className="text-red-600">
+              <p className="text-lg font-semibold">Error</p>
+              <p className="text-xs">{error}</p>
+            </div>
           ) : (
             <>
               <p className="text-3xl font-bold mb-1">
