@@ -311,21 +311,6 @@ export default function AreasPage() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Gestión de Áreas</CardTitle>
-              <CardDescription className="text-sm">
-                Administra las áreas del sistema
-              </CardDescription>
-            </div>
-            <Button onClick={handleCreateArea} className="h-8 text-xs px-3">
-              <Plus className="h-3 w-3 mr-1" />
-              Nueva Área
-            </Button>
-          </div>
-        </CardHeader>
-        
         <CardContent className="pt-0">
           {/* Filters */}
           <div className="flex items-center gap-3 mb-4">

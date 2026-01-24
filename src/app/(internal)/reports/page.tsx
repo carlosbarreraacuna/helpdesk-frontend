@@ -53,19 +53,8 @@ export default function ReportsPage() {
     <div className="p-8">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Reportes e Indicadores</h1>
-          <p className="text-gray-600">
-            Dashboard de métricas y estadísticas - {user?.role?.display_name}
-          </p>
-        </div>
-        <button
-          onClick={refresh}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          <RefreshCw size={20} />
-          Actualizar
-        </button>
+        
+       
       </div>
 
       {/* Filtros */}
@@ -99,13 +88,24 @@ export default function ReportsPage() {
             <option value="media">Media</option>
             <option value="baja">Baja</option>
           </select>
-          <button
-            onClick={refresh}
-            className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded"
-          >
-            Aplicar Filtros
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={refresh}
+              className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded"
+            >
+              Aplicar Filtros
+            </button>
+            <button
+              onClick={refresh}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <RefreshCw size={20} />
+              Actualizar
+            </button>
+          </div>
+          
         </div>
+        
       </div>
 
       {loading ? (

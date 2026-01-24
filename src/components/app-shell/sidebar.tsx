@@ -19,7 +19,7 @@ interface MenuItem {
 }
 
 export function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [expandedItems, setExpandedItems] = useState<number[]>([]);
   const pathname = usePathname();
@@ -125,16 +125,7 @@ export function Sidebar() {
         {menuItems.map(item => renderMenuItem(item))}
       </nav>
 
-      {/* Botón logout */}
-      <div className="absolute bottom-0 left-0 right-0 p-4">
-        <button
-          onClick={logout}
-          className="w-full flex items-center gap-2 px-4 py-3 text-red-400 hover:bg-red-900 hover:text-red-300 rounded-lg transition-colors"
-        >
-          <Icons.LogOut size={20} />
-          Cerrar Sesión
-        </button>
-      </div>
+      
     </div>
   );
 }

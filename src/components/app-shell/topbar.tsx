@@ -1,52 +1,144 @@
 'use client';
 
-import { useAuthStore } from '@/lib/auth-store';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import * as Icons from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export function Topbar() {
-  const { user, clearAuth } = useAuthStore();
+  const { user, logout } = useAuth();
+  const pathname = usePathname();
 
-  const handleLogout = async () => {
-    try {
-      // Call logout endpoint
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${useAuthStore.getState().token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      clearAuth();
-      window.location.href = '/login';
+  // Configuración del breadcrumb
+  const breadcrumbConfig = {
+    '/dashboard': {
+      title: 'Dashboard',
+      subtitle: 'Resumen general del sistema de tickets'
+    },
+    '/tickets': {
+      title: 'Gestión de Tickets',
+      subtitle: 'Administra los tickets de soporte'
+    },
+    '/reports': {
+      title: 'Reportes e Indicadores',
+      subtitle: 'Dashboard de métricas y estadísticas - Administrador'
+    },
+    '/admin/users': {
+      title: 'Gestión de Usuarios',
+      subtitle: 'Administra los usuarios del sistema'
+    },
+    '/admin/roles-permissions': {
+      title: 'Gestión de Roles y Permisos',
+      subtitle: 'Administra los roles y permisos del sistema'
+    },
+    '/admin/areas': {
+      title: 'Gestión de Áreas',
+      subtitle: 'Administra las áreas del sistema'
+    },
+    '/admin/menu': {
+      title: 'Configuración del Menú',
+      subtitle: 'Gestiona los items del sidebar y asigna por rol'
     }
+  };
+
+  // Obtener la información del breadcrumb actual
+  const getCurrentBreadcrumb = () => {
+    // Buscar coincidencia exacta primero
+    if (breadcrumbConfig[pathname as keyof typeof breadcrumbConfig]) {
+      return breadcrumbConfig[pathname as keyof typeof breadcrumbConfig];
+    }
+    
+    // Buscar coincidencias parciales para rutas dinámicas
+    if (pathname.startsWith('/tickets/')) {
+      return breadcrumbConfig['/tickets'];
+    }
+    
+    // Valor por defecto
+    return {
+      title: 'Dashboard',
+      subtitle: 'Resumen general del sistema de tickets'
+    };
+  };
+
+  const currentBreadcrumb = getCurrentBreadcrumb();
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
     <div className="h-16 bg-white border-b border-gray-200 fixed left-64 right-0 top-0 z-10">
       <div className="flex items-center justify-between h-full px-6">
+        {/* Breadcrumb */}
         <div>
           <h2 className="text-xl font-semibold text-gray-800">
-            Bienvenido, {user?.name}
+            {currentBreadcrumb.title}
           </h2>
-          <p className="text-sm text-gray-600">
-            {user?.role?.name} - {user?.area?.name || 'Sin área asignada'}
-          </p>
+          {currentBreadcrumb.subtitle && (
+            <p className="text-sm text-gray-600">
+              {currentBreadcrumb.subtitle}
+            </p>
+          )}
         </div>
         
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-600">
-            {user?.email}
-          </span>
-          <Button 
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-          >
-            Cerrar sesión
+          <Button variant="ghost" size="icon" className="relative">
+            <Icons.Bell className="h-5 w-5" />
+            <span className="absolute top-1 right-1 h-2 w-2 bg-orange-500 rounded-full"></span>
           </Button>
+          <Button variant="ghost" size="icon" className="relative">
+            <Icons.Mail className="h-5 w-5" />
+            <span className="absolute top-1 right-1 h-2 w-2 bg-green-500 rounded-full"></span>
+          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-blue-100 text-blue-600 text-sm font-semibold">
+                    {user?.name?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{user?.name}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user?.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Icons.User className="mr-2 h-4 w-4" />
+                <span>Mi Perfil</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Icons.Settings className="mr-2 h-4 w-4" />
+                <span>Configuración</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Icons.Bell className="mr-2 h-4 w-4" />
+                <span>Notificaciones</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <Icons.LogOut className="mr-2 h-4 w-4" />
+                <span>Cerrar Sesión</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

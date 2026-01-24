@@ -109,19 +109,14 @@ export default function MenuConfigPage() {
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Configuración del Menú</h1>
-          <p className="text-gray-600">Gestiona los items del sidebar y asigna por rol</p>
-        </div>
+      
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          className="flex items-center p-2 gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
         >
           <Plus size={20} />
           Nuevo Item
         </button>
-      </div>
 
       <div className="grid grid-cols-12 gap-6">
         {/* Columna izquierda: Selección de rol */}

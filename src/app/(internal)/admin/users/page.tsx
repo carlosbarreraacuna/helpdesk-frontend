@@ -235,21 +235,11 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
-          <p className="text-sm text-gray-600">Administra los usuarios del sistema</p>
-        </div>
-        <Button size="sm" onClick={() => setShowCreateModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Usuario
-        </Button>
-      </div>
+      
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -271,7 +261,7 @@ export default function UsersPage() {
               <SelectItem value="all">Todos los roles</SelectItem>
               {roles.map(role => (
                 <SelectItem key={role.id} value={role.id.toString()}>
-                  {role.display_name}
+                  {role.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -295,8 +285,8 @@ export default function UsersPage() {
           </Select>
 
           <Select
-            value={filters.is_active || undefined}
-            onValueChange={(value) => handleFilterChange({ ...filters, is_active: value })}
+            value={filters.is_active !== undefined && filters.is_active !== '' ? filters.is_active.toString() : undefined}
+            onValueChange={(value) => handleFilterChange({ ...filters, is_active: value === 'all' ? '' : value === '1' })}
           >
             <SelectTrigger className="h-9 text-sm">
               <SelectValue placeholder="Estado" />
@@ -311,6 +301,11 @@ export default function UsersPage() {
           <div className="text-xs text-gray-600 flex items-center">
             {pagination.total} usuarios
           </div>
+
+          <Button size="sm" onClick={() => setShowCreateModal(true)} className="h-9">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Usuario
+          </Button>
         </div>
       </Card>
 

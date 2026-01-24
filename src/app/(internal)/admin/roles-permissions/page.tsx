@@ -143,22 +143,19 @@ export default function RolesPermissionsPage() {
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Gestión de Roles y Permisos</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowCreatePermissionModal(true)}
-            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-          >
-            + Nuevo Permiso
-          </button>
-          <button
-            onClick={() => setShowCreateRoleModal(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            + Nuevo Rol
-          </button>
-        </div>
+      <div className="flex gap-3 mb-6">
+        <button
+          onClick={() => setShowCreatePermissionModal(true)}
+          className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+        >
+          + Nuevo Permiso
+        </button>
+        <button
+          onClick={() => setShowCreateRoleModal(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          + Nuevo Rol
+        </button>
       </div>
       
       <div className="grid grid-cols-12 gap-6">
