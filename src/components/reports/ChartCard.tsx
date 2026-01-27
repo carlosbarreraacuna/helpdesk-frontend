@@ -70,7 +70,7 @@ export default function ChartCard({ chart, filters }: { chart: Report; filters: 
                   dataKey={`dataset${idx}`}
                   name={dataset.label}
                   stroke={dataset.borderColor}
-                  fill={dataset.backgroundColor}
+                  fill={Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor[0] : dataset.backgroundColor}
                 />
               ))}
             </AreaChart>

@@ -14,7 +14,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-export function Topbar() {
+interface TopbarProps {
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+}
+
+export function Topbar({ sidebarOpen = true, onToggleSidebar }: TopbarProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
 
@@ -76,18 +81,29 @@ export function Topbar() {
   };
 
   return (
-    <div className="h-16 bg-white border-b border-gray-200 fixed left-64 right-0 top-0 z-10">
-      <div className="flex items-center justify-between h-full px-6">
-        {/* Breadcrumb */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-800">
-            {currentBreadcrumb.title}
-          </h2>
-          {currentBreadcrumb.subtitle && (
-            <p className="text-sm text-gray-600">
-              {currentBreadcrumb.subtitle}
-            </p>
-          )}
+    <div className="h-16 bg-white border-b border-gray-200 flex-shrink-0">
+      <div className="flex items-center justify-between h-full px-4 lg:px-6">
+        {/* Botón de hamburguesa y breadcrumb */}
+        <div className="flex items-center gap-4">
+          {/* Botón de hamburguesa - visible en móvil, opcional en desktop */}
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            {sidebarOpen ? <Icons.X size={20} /> : <Icons.Menu size={20} />}
+          </button>
+          
+          {/* Breadcrumb */}
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">
+              {currentBreadcrumb.title}
+            </h2>
+            {currentBreadcrumb.subtitle && (
+              <p className="text-sm text-gray-600">
+                {currentBreadcrumb.subtitle}
+              </p>
+            )}
+          </div>
         </div>
         
         <div className="flex items-center space-x-4">

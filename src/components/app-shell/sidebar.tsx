@@ -18,7 +18,12 @@ interface MenuItem {
   };
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onToggle?: () => void;
+}
+
+export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
   const { user } = useAuth();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [expandedItems, setExpandedItems] = useState<number[]>([]);
@@ -110,22 +115,49 @@ export function Sidebar() {
   };
 
   return (
-    <div className="w-64 bg-gray-900 text-white h-screen fixed left-0 top-0">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold">HelpDesk</h1>
-        
-        {/* Info del usuario */}
-        <div className="mb-6 p-3 bg-gray-800 rounded-lg">
-          <p className="font-semibold text-sm">{user?.name}</p>
-          <p className="text-xs text-gray-400">{user?.role?.display_name || user?.role?.name}</p>
+    <>
+      {/* Overlay para móvil */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={onToggle}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <div className={`
+        ${isOpen ? 'block' : 'hidden lg:block'}
+        w-64 bg-gray-900 text-white h-screen 
+        flex-shrink-0
+        lg:relative fixed inset-y-0 left-0 z-50
+        lg:translate-x-0
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        transform transition-transform duration-300 ease-in-out
+      `}>
+        <div className="p-4 lg:p-6 h-full overflow-y-auto">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-xl lg:text-2xl font-bold">HelpDesk</h1>
+            
+            {/* Botón de cerrar para móvil */}
+            <button
+              onClick={onToggle}
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Icons.X size={20} />
+            </button>
+          </div>
+          
+          {/* Info del usuario */}
+          <div className="mb-6 p-3 bg-gray-800 rounded-lg">
+            <p className="font-semibold text-sm truncate">{user?.name}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.role?.display_name || user?.role?.name}</p>
+          </div>
+          
+          <nav className="mt-8">
+            {menuItems.map(item => renderMenuItem(item))}
+          </nav>
         </div>
       </div>
-      
-      <nav className="mt-8">
-        {menuItems.map(item => renderMenuItem(item))}
-      </nav>
-
-      
-    </div>
+    </>
   );
 }
