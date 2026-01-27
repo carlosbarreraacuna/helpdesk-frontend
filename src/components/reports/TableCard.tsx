@@ -5,7 +5,7 @@ import { Download } from 'lucide-react';
 import { Report } from '@/types/reports';
 
 export default function TableCard({ table, filters }: { table: Report; filters: any }) {
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -64,7 +64,16 @@ export default function TableCard({ table, filters }: { table: Report; filters: 
                 <tr key={idx} className="hover:bg-gray-50">
                   {table.config.columns?.map(col => (
                     <td key={col} className="px-6 py-4 text-sm text-gray-900">
-                      {(typeof row[col] === 'number' ? row[col].toLocaleString() : String(row[col]))}
+                      {(() => {
+                        const value = row[col];
+                        if (typeof value === 'number') {
+                          return value.toLocaleString();
+                        }
+                        if (value === null || value === undefined) {
+                          return '-';
+                        }
+                        return String(value);
+                      })()}
                     </td>
                   ))}
                 </tr>
