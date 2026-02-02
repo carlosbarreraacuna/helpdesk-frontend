@@ -28,11 +28,13 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess, roles, are
     name: '',
     username: '',
     email: '',
+    cedula: '',
     password: '',
     password_confirmation: '',
     role_id: '',
     area_id: '',
     phone: '',
+    whatsapp_phone: '',
     is_active: true,
   });
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -44,11 +46,13 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess, roles, are
         name: '',
         username: '',
         email: '',
+        cedula: '',
         password: '',
         password_confirmation: '',
         role_id: '',
         area_id: '',
         phone: '',
+        whatsapp_phone: '',
         is_active: true,
       });
       setErrors({});
@@ -123,6 +127,20 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess, roles, are
             {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email[0]}</p>}
           </div>
 
+          <div>
+            <label className="block text-sm font-medium mb-1">Cédula de Ciudadanía *</label>
+            <input
+              type="text"
+              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.cedula}
+              onChange={(e) => setFormData({...formData, cedula: e.target.value})}
+              placeholder="Ej: 123456789"
+              required
+            />
+            {errors.cedula && <p className="text-red-500 text-xs mt-1">{errors.cedula[0]}</p>}
+            <p className="text-xs text-gray-500 mt-1">Número de cédula para autenticación vía WhatsApp</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Contraseña *</label>
@@ -189,7 +207,20 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess, roles, are
               className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={formData.phone}
               onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              placeholder="Ej: 3001234567"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">WhatsApp</label>
+            <input
+              type="tel"
+              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.whatsapp_phone}
+              onChange={(e) => setFormData({...formData, whatsapp_phone: e.target.value})}
+              placeholder="Ej: 573001234567"
+            />
+            <p className="text-xs text-gray-500 mt-1">Número de WhatsApp con código de país</p>
           </div>
 
           <div className="flex items-center gap-2">
