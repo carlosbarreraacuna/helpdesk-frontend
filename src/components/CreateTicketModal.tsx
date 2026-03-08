@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,8 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertCircle, Upload, X, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Upload, X, CheckCircle2, BookOpen, ExternalLink } from 'lucide-react';
 import api from '@/lib/api';
+import { kbApi, KbSuggestion } from '@/lib/kb-api';
 import { useAuth } from '@/contexts/AuthContext';
 
 const createTicketSchema = z.object({
@@ -35,7 +36,10 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const [error, setError] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
-  
+  const [kbSuggestions, setKbSuggestions] = useState<KbSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const kbDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Obtener datos del usuario autenticado
   const { user } = useAuth();
   
@@ -89,6 +93,28 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   }, [user, setValue]);
 
   const priority = watch('priority');
+  const description = watch('description');
+
+  useEffect(() => {
+    if (kbDebounceRef.current) clearTimeout(kbDebounceRef.current);
+    if (!description || description.length < 10) {
+      setKbSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    kbDebounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await kbApi.suggest(description);
+        setKbSuggestions(data);
+        setShowSuggestions(data.length > 0);
+      } catch {
+        setKbSuggestions([]);
+      }
+    }, 600);
+    return () => {
+      if (kbDebounceRef.current) clearTimeout(kbDebounceRef.current);
+    };
+  }, [description]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -273,6 +299,46 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
                 <AlertCircle className="w-4 h-4" />
                 {errors.description.message}
               </p>
+            )}
+
+            {/* KB Suggestions */}
+            {showSuggestions && kbSuggestions.length > 0 && (
+              <div className="border border-blue-200 rounded-lg bg-blue-50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-blue-700 flex items-center gap-1.5">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    ¿Tu problema ya tiene solución? Revisa estos artículos antes de enviar el ticket:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowSuggestions(false)}
+                    className="text-blue-400 hover:text-blue-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {kbSuggestions.map(s => (
+                    <a
+                      key={s.id}
+                      href={`/knowledge-base/${s.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2 bg-white rounded border border-blue-100 hover:border-blue-300 transition-colors text-xs text-gray-700 group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-800 group-hover:text-blue-700 truncate block">
+                          {s.title}
+                        </span>
+                        {s.category && (
+                          <span className="text-gray-400">{s.category}</span>
+                        )}
+                      </div>
+                      <ExternalLink className="h-3 w-3 text-blue-400 shrink-0 ml-2" />
+                    </a>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 

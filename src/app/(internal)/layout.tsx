@@ -35,24 +35,20 @@ export default function InternalLayout({
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar con estado controlado */}
+      <div className="h-screen overflow-hidden bg-gray-50 flex">
+        {/* Sidebar fijo — no crece con el contenido */}
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         
         {/* Contenedor principal para topbar y content */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0 h-full">
           {/* Topbar con botón de hamburguesa */}
           <Topbar 
             sidebarOpen={sidebarOpen} 
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
           />
           
-          {/* Main content */}
-          <main className={`
-            flex-1 transition-all duration-300 ease-in-out
-            p-4 lg:p-6
-            overflow-auto
-          `}>
+          {/* Main content — único elemento con scroll */}
+          <main className="flex-1 overflow-auto p-4 lg:p-6">
             {children}
           </main>
         </div>

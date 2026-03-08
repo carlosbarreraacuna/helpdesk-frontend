@@ -34,6 +34,23 @@ export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
     loadMenu();
   }, []);
 
+  // Auto-expand groups whose children match the current path
+  useEffect(() => {
+    if (menuItems.length === 0) return;
+    const toExpand: number[] = [];
+    menuItems.forEach(item => {
+      if (item.children && item.children.length > 0) {
+        const childActive = item.children.some(
+          child => child.route !== '#' && pathname.startsWith(child.route)
+        );
+        if (childActive) toExpand.push(item.id);
+      }
+    });
+    if (toExpand.length > 0) {
+      setExpandedItems(prev => Array.from(new Set([...prev, ...toExpand])));
+    }
+  }, [menuItems, pathname]);
+
   const loadMenu = async () => {
     try {
       const { data } = await api.get('/menu/user');
@@ -67,14 +84,18 @@ export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
     return <Icons.Circle size={20} />;
   };
 
-  const isActive = (route: string) => {
-    return pathname === route || (route !== '#' && pathname.startsWith(route + '/'));
+  const isActive = (route: string, children?: MenuItem[]) => {
+    if (route !== '#' && (pathname === route || pathname.startsWith(route + '/'))) return true;
+    if (children && children.length > 0) {
+      return children.some(c => c.route !== '#' && pathname.startsWith(c.route));
+    }
+    return false;
   };
 
   const renderMenuItem = (item: MenuItem, level = 0) => {
     const hasChildren = Boolean(item.children && item.children.length > 0);
     const isExpanded = expandedItems.includes(item.id);
-    const active = isActive(item.route || '#');
+    const active = isActive(item.route || '#', item.children);
 
     return (
       <div key={item.id} className="mb-1">

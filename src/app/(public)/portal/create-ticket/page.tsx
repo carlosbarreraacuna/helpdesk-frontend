@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,8 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CheckCircle2, ArrowRight, Shield, Clock, Headphones, Upload, X, AlertCircle } from 'lucide-react';
-import Image from 'next/image';
+import { CheckCircle2, ArrowRight, Shield, Clock, Headphones, Upload, X, AlertCircle, BookOpen, ExternalLink } from 'lucide-react';
 import api from '@/lib/api';
 
 const createTicketSchema = z.object({
@@ -191,6 +190,12 @@ function FeaturesSection() {
   );
 }
 
+interface KbSuggestion {
+  id: number;
+  title: string;
+  category?: string;
+}
+
 export default function CreateTicketPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -198,6 +203,9 @@ export default function CreateTicketPage() {
   const [error, setError] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [kbSuggestions, setKbSuggestions] = useState<KbSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const kbTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     register,
@@ -217,6 +225,32 @@ export default function CreateTicketPage() {
   });
 
   const priority = watch('priority');
+  const description = watch('description');
+
+  useEffect(() => {
+    if (kbTimerRef.current) clearTimeout(kbTimerRef.current);
+    if (!description || description.length < 10) {
+      setKbSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/portal/kb/suggest', { params: { q: description } });
+        if (Array.isArray(data) && data.length > 0) {
+          setKbSuggestions(data.slice(0, 4));
+          setShowSuggestions(true);
+        } else {
+          setKbSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch {
+        setKbSuggestions([]);
+      }
+    }, 600);
+    kbTimerRef.current = t;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -460,6 +494,38 @@ export default function CreateTicketPage() {
                     <AlertCircle className="w-4 h-4" />
                     {errors.description.message}
                   </p>
+                )}
+
+                {showSuggestions && kbSuggestions.length > 0 && (
+                  <div className="border border-blue-200 rounded-xl bg-blue-50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-blue-700 flex items-center gap-2">
+                        <BookOpen className="h-4 w-4" />
+                        ¿Tu problema ya tiene solución? Revisa estos artículos:
+                      </p>
+                      <button type="button" onClick={() => setShowSuggestions(false)} className="text-blue-400 hover:text-blue-600">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {kbSuggestions.map(s => (
+                        <a
+                          key={s.id}
+                          href={`/portal/knowledge-base/${s.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-100 hover:border-blue-300 transition-colors group"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-gray-800 group-hover:text-blue-700 block truncate">{s.title}</span>
+                            {s.category && <span className="text-xs text-gray-400">{s.category}</span>}
+                          </div>
+                          <ExternalLink className="h-3.5 w-3.5 text-blue-400 shrink-0 ml-2" />
+                        </a>
+                      ))}
+                    </div>
+                    <p className="text-xs text-blue-500 text-center">Si alguno resuelve tu problema, no necesitas crear el ticket.</p>
+                  </div>
                 )}
               </div>
 

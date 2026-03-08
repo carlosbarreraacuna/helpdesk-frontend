@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Menu, X, Headphones } from "lucide-react"
+import { Menu, X, BookOpen } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 
@@ -16,6 +16,7 @@ export default function PublicLayout({
   const navLinks = [
     { href: "/portal/create-ticket", label: "Crear Ticket" },
     { href: "/portal/search-ticket", label: "Consultar Ticket" },
+    { href: "/portal/knowledge-base", label: "Base de Conocimiento" },
     { href: "/login", label: "Acceso Interno" },
   ]
 
@@ -81,7 +82,7 @@ export default function PublicLayout({
         </div>
       </nav>
       
-      <main className="">
+      <main className="min-h-screen">
         {children}
       </main>
     </div>

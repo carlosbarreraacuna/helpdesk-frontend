@@ -8,7 +8,7 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
         <div className="bg-white p-8 rounded-lg shadow-sm border">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">🎫</span>
@@ -38,6 +38,22 @@ export default function HomePage() {
             className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
           >
             Buscar Ticket
+          </a>
+        </div>
+
+        <div className="bg-white p-8 rounded-lg shadow-sm border">
+          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">📚</span>
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Base de Conocimiento</h2>
+          <p className="text-gray-600 mb-4">
+            Encuentra soluciones a problemas comunes
+          </p>
+          <a 
+            href="/portal/knowledge-base"
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
+            Ver Artículos
           </a>
         </div>
       </div>
