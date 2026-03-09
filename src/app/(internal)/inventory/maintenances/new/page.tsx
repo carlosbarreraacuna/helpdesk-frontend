@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { assetsApi, Asset, ServiceProvider } from '@/lib/assets-api';
 import { ArrowLeft, Save } from 'lucide-react';
 
-export default function NewMaintenancePage() {
+function NewMaintenanceForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetAssetId = searchParams.get('asset_id');
@@ -144,5 +144,13 @@ export default function NewMaintenancePage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewMaintenancePage() {
+  return (
+    <Suspense>
+      <NewMaintenanceForm />
+    </Suspense>
   );
 }
