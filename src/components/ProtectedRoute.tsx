@@ -1,17 +1,22 @@
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, token, loading, checkAuth } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    checkAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !token) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [loading, token, router]);
 
   if (loading) {
     return (
@@ -24,7 +29,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     );
   }
 
-  if (!user) {
+  if (!token || !user) {
     return null;
   }
 

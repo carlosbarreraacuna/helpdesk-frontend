@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 import api from '@/lib/api';
 import MetricCard from '@/components/reports/MetricCard';
 import ChartCard from '@/components/reports/ChartCard';
@@ -10,7 +10,7 @@ import { Filter, Download, RefreshCw } from 'lucide-react';
 import { Report } from '@/types/reports';
 
 export default function ReportsPage() {
-  const { user } = useAuth();
+  const user = useAuthStore(s => s.user);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({

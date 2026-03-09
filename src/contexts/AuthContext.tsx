@@ -40,7 +40,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname, user, loading]);
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('token');
+    // Migrar clave antigua 'token' → 'auth-token' si existe
+    const oldToken = localStorage.getItem('token');
+    if (oldToken && !localStorage.getItem('auth-token')) {
+      localStorage.setItem('auth-token', oldToken);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+
+    const token = localStorage.getItem('auth-token');
     
     if (!token) {
       setLoading(false);
@@ -52,8 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data);
     } catch (error) {
       console.error('Error verificando autenticación:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('auth-token');
+      localStorage.removeItem('auth-user');
       setUser(null);
     } finally {
       setLoading(false);
@@ -65,8 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await api.post('/auth/login', { login, password });
       
       // Guardar token y usuario
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('auth-token', data.token);
+      localStorage.setItem('auth-user', JSON.stringify(data.user));
       
       setUser(data.user);
       
@@ -83,8 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('auth-token');
+      localStorage.removeItem('auth-user');
       setUser(null);
       router.push('/login');
     }

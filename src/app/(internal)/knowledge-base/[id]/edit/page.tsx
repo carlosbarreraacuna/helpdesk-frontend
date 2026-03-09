@@ -84,8 +84,11 @@ export default function EditArticlePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-1/3" />
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          {[...Array(4)].map((_, i) => (<div key={i} className="h-4 bg-gray-200 rounded" style={{width: `${75 + i * 5}%`}} />))}
+        </div>
       </div>
     );
   }

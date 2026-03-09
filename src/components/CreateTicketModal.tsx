@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertCircle, Upload, X, CheckCircle2, BookOpen, ExternalLink } from 'lucide-react';
 import api from '@/lib/api';
 import { kbApi, KbSuggestion } from '@/lib/kb-api';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 
 const createTicketSchema = z.object({
   requester_name: z.string().min(1, 'El nombre es requerido'),
@@ -41,7 +41,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const kbDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Obtener datos del usuario autenticado
-  const { user } = useAuth();
+  const user = useAuthStore(s => s.user);
   
   // Debug: mostrar datos del usuario
   console.log('Usuario en modal:', user);
@@ -82,8 +82,6 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
           areaName = user.area;
         } else if (user.area.name) {
           areaName = user.area.name;
-        } else if (user.area.nombre) {
-          areaName = user.area.nombre;
         }
       }
       

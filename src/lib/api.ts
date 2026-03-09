@@ -18,7 +18,7 @@ api.interceptors.request.use(
   (config) => {
     // ✅ Evita romper el build (localStorage no existe en server/build)
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth-token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -33,11 +33,15 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // ✅ Evita romper el build (window/localStorage no existen en server/build)
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        const isOnLoginPage = window.location.pathname === '/login';
+        // Solo redirigir si no estamos ya en /login y hay un token guardado
+        const hasToken = !!localStorage.getItem('auth-token');
+        if (!isOnLoginPage && hasToken) {
+          localStorage.removeItem('auth-token');
+          localStorage.removeItem('auth-user');
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

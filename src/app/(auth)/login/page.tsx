@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 
 const loginSchema = z.object({
   login: z.string().min(1, 'El email o username es requerido'),
@@ -20,7 +20,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const login = useAuthStore(s => s.login);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,8 +38,12 @@ export default function LoginPage() {
 
     try {
       await login(data.login, data.password);
-    } catch (err: any) {
-      setError(err.message);
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message
+        : (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'Error al iniciar sesión';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }

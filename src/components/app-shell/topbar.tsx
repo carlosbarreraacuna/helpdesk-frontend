@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 import { Button } from '@/components/ui/button';
 import * as Icons from 'lucide-react';
 import {
@@ -20,7 +20,8 @@ interface TopbarProps {
 }
 
 export function Topbar({ sidebarOpen = true, onToggleSidebar }: TopbarProps) {
-  const { user, logout } = useAuth();
+  const user = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
   const pathname = usePathname();
 
   // Configuración del breadcrumb
@@ -81,7 +82,7 @@ export function Topbar({ sidebarOpen = true, onToggleSidebar }: TopbarProps) {
   };
 
   return (
-    <div className="h-16 bg-white border-b border-gray-200 flex-shrink-0">
+    <div className="h-16 bg-white border-b border-gray-200 shrink-0">
       <div className="flex items-center justify-between h-full px-4 lg:px-6">
         {/* Botón de hamburguesa y breadcrumb */}
         <div className="flex items-center gap-4">

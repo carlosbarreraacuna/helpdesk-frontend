@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Menu, X, BookOpen } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import HelpdeskWidget from '@/components/widget/HelpdeskWidget';
 
 export default function PublicLayout({
   children,
@@ -85,6 +86,7 @@ export default function PublicLayout({
       <main className="min-h-screen">
         {children}
       </main>
+      <HelpdeskWidget user={null} />
     </div>
   );
 }

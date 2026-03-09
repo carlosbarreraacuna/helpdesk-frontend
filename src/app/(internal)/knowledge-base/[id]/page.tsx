@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { kbApi, KbArticle, KbArticleVersion } from '@/lib/kb-api';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 import {
   ArrowLeft, BookOpen, ThumbsUp, ThumbsDown, Eye, Tag,
   Clock, User, History, Plus, CheckCircle, Archive,
@@ -22,7 +22,7 @@ export default function ArticleDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = Number(params.id);
-  const { user } = useAuth();
+  const user = useAuthStore(s => s.user);
 
   const [article, setArticle] = useState<KbArticle | null>(null);
   const [versions, setVersions] = useState<KbArticleVersion[]>([]);
@@ -129,8 +129,11 @@ export default function ArticleDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-1/3" />
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+          {[...Array(5)].map((_, i) => (<div key={i} className="h-4 bg-gray-200 rounded" style={{width: `${70 + i * 5}%`}} />))}
+        </div>
       </div>
     );
   }

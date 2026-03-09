@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { kbApi, KbArticle, KbCategory, KbTag } from '@/lib/kb-api';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/lib/auth-store';
 import {
   Search,
   Plus,
@@ -38,7 +38,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function KnowledgeBasePage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const user = useAuthStore(s => s.user);
 
   const [articles, setArticles] = useState<KbArticle[]>([]);
   const [categories, setCategories] = useState<KbCategory[]>([]);
@@ -124,8 +124,17 @@ export default function KnowledgeBasePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-1/4" />
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 py-3 border-b border-gray-100 last:border-0">
+              <div className="h-4 bg-gray-200 rounded w-1/4" />
+              <div className="h-4 bg-gray-200 rounded flex-1" />
+              <div className="h-4 bg-gray-200 rounded w-1/4" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

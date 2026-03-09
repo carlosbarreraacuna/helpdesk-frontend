@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -67,6 +68,7 @@ interface Area {
 }
 
 export default function TicketsPage() {
+  const router = useRouter();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [pagination, setPagination] = useState({
     current_page: 1,
@@ -220,8 +222,18 @@ export default function TicketsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-1/4" />
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 py-3 border-b border-gray-100 last:border-0">
+              <div className="h-4 bg-gray-200 rounded w-20 shrink-0" />
+              <div className="h-4 bg-gray-200 rounded flex-1" />
+              <div className="h-4 bg-gray-200 rounded w-24 shrink-0" />
+              <div className="h-6 bg-gray-200 rounded-full w-20 shrink-0" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -402,7 +414,7 @@ export default function TicketsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.location.href = `/tickets/${ticket.id}`}
+                          onClick={() => router.push(`/tickets/${ticket.id}`)}
                           className="h-7 w-7 p-0"
                         >
                           <Eye className="h-3 w-3" />

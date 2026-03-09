@@ -1,47 +1,29 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import api from '@/lib/api';
 import * as Icons from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-
-interface MenuItem {
-  id: number;
-  key: string;
-  label: string;
-  icon: string;
-  route: string;
-  children?: MenuItem[];
-  metadata?: {
-    badge?: string;
-    color?: string;
-  };
-}
+import { useAuthStore } from '@/lib/auth-store';
+import { useMenuItems, MenuItem } from './SidebarContext';
 
 interface SidebarProps {
   isOpen?: boolean;
   onToggle?: () => void;
 }
 
-export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
-  const { user } = useAuth();
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+// Componente de navegación separado — solo se re-renderiza cuando pathname cambia
+const NavMenu = memo(function NavMenu() {
+  const menuItems = useMenuItems();
   const [expandedItems, setExpandedItems] = useState<number[]>([]);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    loadMenu();
-  }, []);
-
-  // Auto-expand groups whose children match the current path
-  useEffect(() => {
     if (menuItems.length === 0) return;
     const toExpand: number[] = [];
-    menuItems.forEach(item => {
+    menuItems.forEach((item: MenuItem) => {
       if (item.children && item.children.length > 0) {
         const childActive = item.children.some(
-          child => child.route !== '#' && pathname.startsWith(child.route)
+          (child: MenuItem) => child.route !== '#' && pathname.startsWith(child.route)
         );
         if (childActive) toExpand.push(item.id);
       }
@@ -51,89 +33,61 @@ export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
     }
   }, [menuItems, pathname]);
 
-  const loadMenu = async () => {
-    try {
-      const { data } = await api.get('/menu/user');
-      setMenuItems(data);
-    } catch (error) {
-      console.error('Error loading menu:', error);
-    }
-  };
-
   const toggleExpand = (itemId: number) => {
     setExpandedItems(prev =>
-      prev.includes(itemId)
-        ? prev.filter(id => id !== itemId)
-        : [...prev, itemId]
+      prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
     );
   };
 
-  const handleNavigate = (route: string, hasChildren: boolean, itemId: number) => {
-    if (hasChildren) {
-      toggleExpand(itemId);
-    } else if (route !== '#') {
-      router.push(route);
-    }
-  };
-
   const getIcon = (iconName: string) => {
-    const IconComponent = Icons[iconName as keyof typeof Icons] as any;
-    if (typeof IconComponent === 'function') {
-      return <IconComponent size={20} />;
-    }
+    const IconComponent = Icons[iconName as keyof typeof Icons] as React.ComponentType<{ size: number }>;
+    if (typeof IconComponent === 'function') return <IconComponent size={20} />;
     return <Icons.Circle size={20} />;
   };
 
   const isActive = (route: string, children?: MenuItem[]) => {
     if (route !== '#' && (pathname === route || pathname.startsWith(route + '/'))) return true;
-    if (children && children.length > 0) {
-      return children.some(c => c.route !== '#' && pathname.startsWith(c.route));
-    }
+    if (children?.length) return children.some(c => c.route !== '#' && pathname.startsWith(c.route));
     return false;
   };
 
   const renderMenuItem = (item: MenuItem, level = 0) => {
-    const hasChildren = Boolean(item.children && item.children.length > 0);
+    const hasChildren = Boolean(item.children?.length);
     const isExpanded = expandedItems.includes(item.id);
     const active = isActive(item.route || '#', item.children);
-
     return (
       <div key={item.id} className="mb-1">
         <button
-          onClick={() => handleNavigate(item.route, hasChildren, item.id)}
+          onClick={() => hasChildren ? toggleExpand(item.id) : item.route !== '#' && router.push(item.route)}
           className={`w-full flex items-center justify-between px-6 py-3 text-sm font-medium transition-colors ${
-            active
-              ? 'bg-gray-800 border-r-4 border-blue-500 text-white'
-              : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+            active ? 'bg-gray-800 border-r-4 border-blue-500 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
           } ${level > 0 ? 'pl-12' : ''}`}
         >
           <div className="flex items-center gap-3">
-            <span className={active ? 'text-white' : 'text-gray-400'}>
-              {getIcon(item.icon)}
-            </span>
+            <span className={active ? 'text-white' : 'text-gray-400'}>{getIcon(item.icon)}</span>
             <span>{item.label}</span>
             {item.metadata?.badge && (
-              <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                {item.metadata.badge}
-              </span>
+              <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">{item.metadata.badge}</span>
             )}
           </div>
           {hasChildren && (
-            <Icons.ChevronDown
-              size={16}
-              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-            />
+            <Icons.ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
           )}
         </button>
-
         {hasChildren && isExpanded && (
           <div className="bg-gray-800 border-l-2 border-gray-700">
-            {item.children!.map(child => renderMenuItem(child, level + 1))}
+            {item.children!.map((child: MenuItem) => renderMenuItem(child, level + 1))}
           </div>
         )}
       </div>
     );
   };
+
+  return <nav className="mt-8">{menuItems.map((item: MenuItem) => renderMenuItem(item))}</nav>;
+});
+
+export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
+  const user = useAuthStore(s => s.user);
 
   return (
     <>
@@ -171,12 +125,10 @@ export function Sidebar({ isOpen = true, onToggle }: SidebarProps) {
           {/* Info del usuario */}
           <div className="mb-6 p-3 bg-gray-800 rounded-lg">
             <p className="font-semibold text-sm truncate">{user?.name}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.role?.display_name || user?.role?.name}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.role?.name}</p>
           </div>
           
-          <nav className="mt-8">
-            {menuItems.map(item => renderMenuItem(item))}
-          </nav>
+          <NavMenu />
         </div>
       </div>
     </>
