@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { assetsApi, AssetType, AssetTypeField, Location } from '@/lib/assets-api';
+import api from '@/lib/api';
+import { assetsApi, AssetType, AssetTypeField, Area } from '@/lib/assets-api';
 import { ArrowLeft, Save } from 'lucide-react';
 
 export default function NewAssetPage() {
   const router = useRouter();
   const [types, setTypes] = useState<AssetType[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [selectedType, setSelectedType] = useState<AssetType | null>(null);
   const [typeFields, setTypeFields] = useState<AssetTypeField[]>([]);
   const [saving, setSaving] = useState(false);
@@ -23,7 +24,7 @@ export default function NewAssetPage() {
     internal_code: '',
     serial_number: '',
     inventory_tag: '',
-    location_id: '',
+    area_id: '',
     vendor: '',
     purchase_date: '',
     warranty_end_date: '',
@@ -35,7 +36,7 @@ export default function NewAssetPage() {
 
   useEffect(() => {
     assetsApi.getTypes().then(({ data }) => setTypes(data));
-    assetsApi.getLocations().then(({ data }) => setLocations(data));
+    api.get('/areas').then(({ data }) => setAreas(Array.isArray(data) ? data : (data.data ?? [])));
   }, []);
 
   const handleTypeChange = (typeId: string) => {
@@ -63,7 +64,7 @@ export default function NewAssetPage() {
       await assetsApi.createAsset({
         ...form,
         asset_type_id: Number(form.asset_type_id),
-        location_id: form.location_id ? Number(form.location_id) : null,
+        area_id: form.area_id ? Number(form.area_id) : null,
         field_values: fv,
       });
       router.push('/inventory/assets');
@@ -148,12 +149,12 @@ export default function NewAssetPage() {
               <Label>Ubicación</Label>
               <select
                 className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                value={form.location_id}
-                onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))}
+                value={form.area_id}
+                onChange={e => setForm(f => ({ ...f, area_id: e.target.value }))}
               >
-                <option value="">Sin ubicación</option>
-                {locations.map(l => (
-                  <option key={l.id} value={l.id}>{l.area?.name} — {l.name}</option>
+                <option value="">Sin área</option>
+                {areas.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
             </div>

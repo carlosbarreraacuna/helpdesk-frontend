@@ -169,10 +169,10 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
                   </dd>
                 </div>
               )}
-              {asset.location && (
+              {asset.area && (
                 <div className="flex justify-between">
-                  <dt className="text-gray-500 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />Ubicación</dt>
-                  <dd className="font-medium">{asset.location.name}</dd>
+                  <dt className="text-gray-500 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />Área</dt>
+                  <dd className="font-medium">{asset.area.name}</dd>
                 </div>
               )}
               {asset.current_user && (

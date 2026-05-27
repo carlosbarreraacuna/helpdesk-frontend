@@ -7,21 +7,24 @@ const API_BASE =
 export const api = axios.create({
   baseURL: `${API_BASE}/api`,
   headers: {
-    'Content-Type': 'application/json',
     Accept: 'application/json',
   },
   withCredentials: false,
 });
 
-// Request interceptor to add auth token
+// Request interceptor: add auth token and set Content-Type correctly
 api.interceptors.request.use(
   (config) => {
-    // ✅ Evita romper el build (localStorage no existe en server/build)
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('auth-token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+    }
+    // Let Axios set Content-Type automatically for FormData (includes boundary)
+    // For everything else default to JSON
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
     }
     return config;
   },

@@ -40,18 +40,19 @@ export default function TicketNotifications({ token, userRole }: Props) {
     if (!canReceive || !token) return;
 
     const echo = getEcho(token);
+    const pusher = (echo as any).connector?.pusher;
+    if (!pusher) return;
 
-    // Canal público — todos los admins/agentes reciben la notificación
-    echo.channel('tickets.admin').listen('.ticket.created', (data: { ticket: NewTicket }) => {
+    const ch = pusher.subscribe('tickets.admin');
+    const handler = (data: { ticket: NewTicket }) => {
       const ticket = data.ticket;
-      setNotifications(prev => [ticket, ...prev].slice(0, 5)); // máx 5 toasts
-
-      // Auto-dismiss a los 8 segundos
+      setNotifications(prev => [ticket, ...prev].slice(0, 5));
       setTimeout(() => dismiss(ticket.id), 8000);
-    });
+    };
+    ch.bind('ticket.created', handler);
 
     return () => {
-      echo.leaveChannel('tickets.admin');
+      ch.unbind('ticket.created', handler);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, canReceive]);

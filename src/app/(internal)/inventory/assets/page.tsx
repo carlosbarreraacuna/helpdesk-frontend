@@ -175,10 +175,10 @@ export default function AssetsPage() {
                     <div>{asset.serial_number && <span className="text-xs text-gray-400">{asset.serial_number}</span>}</div>
                   </td>
                   <td className="px-4 py-3 text-gray-500">
-                    {asset.location ? (
+                    {asset.area ? (
                       <div className="flex items-center gap-1">
                         <MapPin className="h-3.5 w-3.5" />
-                        {asset.location.name}
+                        {asset.area.name}
                       </div>
                     ) : <span className="text-gray-300">—</span>}
                   </td>

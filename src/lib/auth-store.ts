@@ -19,6 +19,7 @@ export interface AuthUser {
     name: string;
   };
   is_active: boolean;
+  effective_permissions?: string[];
 }
 
 interface AuthState {

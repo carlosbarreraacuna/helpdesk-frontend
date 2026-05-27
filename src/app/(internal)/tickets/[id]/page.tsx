@@ -9,10 +9,14 @@ import { Label } from '@/components/ui/label';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { getEcho } from '@/lib/echo';
+import TicketMeetingsPanel from '@/components/meetings/TicketMeetingsPanel';
+import TicketTraceabilityDrawer from '@/components/tickets/TicketTraceabilityDrawer';
+import RemoteSessionPanel from '@/components/tickets/RemoteSessionPanel';
 import {
   ArrowLeft, Send, Clock, Tag, AlertCircle, CheckCircle2,
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
-  ChevronDown, ChevronUp, BookOpen, Search, ExternalLink,
+  BookOpen, Search, ExternalLink,
+  Mail, MessageCircle, Globe, Users, UserPlus, Trash2, SlidersHorizontal, History,
 } from 'lucide-react';
 
 interface Ticket {
@@ -35,6 +39,14 @@ interface AgentUser {
   id: number;
   name: string;
   email: string;
+  role?: { name: string };
+}
+
+interface Participant {
+  id: number;
+  name: string;
+  email: string;
+  role?: string;
 }
 
 interface Status {
@@ -43,12 +55,21 @@ interface Status {
   color: string;
 }
 
+interface CommentAttachment {
+  url: string;
+  name: string;
+  mime: string | null;
+}
+
 interface Comment {
   id: number;
   comment: string;
-  user: { id: number; name: string; email: string };
+  user: { id: number; name: string; email: string } | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  is_internal?: boolean;
+  ticket_id?: number;
+  attachments?: CommentAttachment[];
 }
 
 type EventType = 'comment' | 'status_change' | 'assign' | 'escalate' | 'close' | 'open';
@@ -71,6 +92,7 @@ interface TimelineEvent {
   timestamp: string;
   attachment_path?: string | null;
   attachment_name?: string | null;
+  attachments?: CommentAttachment[];
   meta?: string;
 }
 
@@ -81,6 +103,22 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string
 };
 
 const API_STORAGE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+
+function renderText(text: string, dark = false) {
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+  return parts.map((part, i) => {
+    const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (m) {
+      return (
+        <a key={i} href={m[2]} target="_blank" rel="noopener noreferrer"
+          className={`underline font-medium ${dark ? 'text-violet-200 hover:text-white' : 'text-violet-700 hover:text-violet-900'}`}>
+          {m[1]}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -100,13 +138,22 @@ export default function TicketDetailPage() {
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
   const [widgetSessionId, setWidgetSessionId] = useState<number | null>(null);
 
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantResults, setParticipantResults] = useState<AgentUser[]>([]);
+  const [addingParticipant, setAddingParticipant] = useState(false);
+
   const [newComment, setNewComment] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [assignUserId, setAssignUserId] = useState('');
   const [assignPriority, setAssignPriority] = useState('media');
   const [statusId, setStatusId] = useState('');
 
-  const [showInfoPanel, setShowInfoPanel] = useState(true);
-  const [imageModal, setImageModal] = useState<string | null>(null);
+const [imageModal, setImageModal] = useState<string | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [showTraceability, setShowTraceability] = useState(false);
+  const [replyChannel, setReplyChannel] = useState<'portal' | 'email' | 'whatsapp'>('portal');
 
   // KB search in reply box
   const [showKbSearch, setShowKbSearch] = useState(false);
@@ -142,6 +189,10 @@ export default function TicketDetailPage() {
           setWidgetMessages(r.data.messages ?? []);
         })
         .catch(() => {});
+
+      api.get(`/tickets/${ticketId}/participants`)
+        .then(r => setParticipants(r.data))
+        .catch(() => {});
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || 'Error al cargar el ticket');
@@ -153,7 +204,10 @@ export default function TicketDetailPage() {
   useEffect(() => {
     loadAll();
     if (canAct) {
-      api.get('/users').then(r => setAgentUsers(r.data.data || [])).catch(() => {});
+      api.get('/users').then(r => {
+        const all: AgentUser[] = r.data.data || [];
+        setAgentUsers(all);
+      }).catch(() => {});
       api.get('/ticket-statuses').then(r => setStatuses(r.data)).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,6 +244,30 @@ export default function TicketDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [widgetSessionId, canAct]);
 
+  // Única función para agregar comentarios a la lista (deduplicada por id)
+  const pushComment = useCallback((c: Comment) => {
+    setComments(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c]);
+  }, []);
+
+  // Real-time: WebSocket — única fuente de verdad para comentarios nuevos
+  useEffect(() => {
+    if (!ticketId) return;
+    const token = useAuthStore.getState().token;
+    if (!token) return;
+
+    const echo = getEcho(token);
+    echo.channel(`ticket.${ticketId}`).listen('.comment.added', (data: {
+      comment: Comment
+    }) => {
+      pushComment(data.comment);
+    });
+
+    return () => {
+      echo.leaveChannel(`ticket.${ticketId}`);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketId, pushComment]);
+
   const searchKb = (q: string) => {
     setKbQuery(q);
     if (kbDebounceRef.current) clearTimeout(kbDebounceRef.current);
@@ -208,8 +286,8 @@ export default function TicketDetailPage() {
   };
 
   const insertKbArticle = (article: { id: number; title: string }) => {
-    const BASE = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
-    const link = `[📖 ${article.title}](${BASE}/knowledge-base/${article.id})`;
+    const BASE = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const link = `[📖 ${article.title}](${BASE}/portal/knowledge-base/${article.id})`;
     setNewComment(prev => prev ? `${prev}\n\n${link}` : link);
     setShowKbSearch(false);
     setKbQuery('');
@@ -222,17 +300,30 @@ export default function TicketDetailPage() {
   };
 
   const handleSendComment = async () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && attachedFiles.length === 0) return;
     setActionLoading('comment');
+    const text  = newComment;
+    const files = attachedFiles;
+    setNewComment('');
+    setAttachedFiles([]);
     try {
-      await api.post(`/tickets/${ticketId}/comments`, { comment: newComment });
-      setNewComment('');
-      const r = await api.get(`/tickets/${ticketId}/comments`);
-      setComments(r.data);
-      flash('Comentario enviado');
+      const form = new FormData();
+      if (text.trim()) form.append('comment', text);
+      files.forEach(f => form.append('files[]', f));
+
+      if (replyChannel === 'portal') {
+        await api.post(`/tickets/${ticketId}/comments`, form);
+      } else {
+        form.append('channel', replyChannel);
+        form.append('message', text);
+        await api.post(`/tickets/${ticketId}/reply-channel`, form);
+      }
+      flash(`Respuesta enviada por ${replyChannel === 'email' ? 'Email' : replyChannel === 'whatsapp' ? 'WhatsApp' : 'Portal'}`);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setError(e.response?.data?.message || 'Error al enviar comentario');
+      setError(e.response?.data?.message || 'Error al enviar');
+      setNewComment(text);
+      setAttachedFiles(files);
     } finally {
       setActionLoading('');
     }
@@ -296,6 +387,37 @@ export default function TicketDetailPage() {
     }
   };
 
+  const searchParticipants = (q: string) => {
+    setParticipantSearch(q);
+    if (q.trim().length < 2) { setParticipantResults([]); return; }
+    const lq = q.toLowerCase();
+    setParticipantResults(
+      agentUsers.filter(u =>
+        u.role?.name === 'usuario' &&
+        (u.name.toLowerCase().includes(lq) || u.email.toLowerCase().includes(lq)) &&
+        !participants.some(p => p.id === u.id)
+      ).slice(0, 6)
+    );
+  };
+
+  const handleAddParticipant = async (u: AgentUser) => {
+    setAddingParticipant(true);
+    try {
+      await api.post(`/tickets/${ticketId}/participants`, { user_id: u.id });
+      setParticipants(prev => [...prev, { id: u.id, name: u.name, email: u.email, role: u.role?.name }]);
+      setParticipantSearch('');
+      setParticipantResults([]);
+    } catch { /* ignore */ }
+    finally { setAddingParticipant(false); }
+  };
+
+  const handleRemoveParticipant = async (userId: number) => {
+    try {
+      await api.delete(`/tickets/${ticketId}/participants/${userId}`);
+      setParticipants(prev => prev.filter(p => p.id !== userId));
+    } catch { /* ignore */ }
+  };
+
   const buildTimeline = (): TimelineEvent[] => {
     if (!ticket) return [];
     const events: TimelineEvent[] = [];
@@ -313,9 +435,10 @@ export default function TicketDetailPage() {
       events.push({
         id: `c-${c.id}`,
         type: 'comment',
-        author: c.user.name,
+        author: c.user?.name ?? ticket.requester_name,
         content: c.comment,
         timestamp: c.created_at,
+        attachments: c.attachments ?? [],
       });
     });
 
@@ -335,7 +458,8 @@ export default function TicketDetailPage() {
     return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   };
 
-  const isImage = (p: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(p);
+  const isImage = (p: string, mime?: string | null) =>
+    (mime?.startsWith('image/')) || /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff)$/i.test(p);
 
   const EventIcon = ({ type }: { type: EventType }) => {
     const cls = 'w-4 h-4';
@@ -404,42 +528,104 @@ export default function TicketDetailPage() {
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-50">
 
       {/* ── Top bar ───────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white border-b shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-6 py-3 bg-white border-b shrink-0 gap-4 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => router.back()}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition shrink-0"
           >
             <ArrowLeft size={18} />
           </button>
-          <div>
+
+          {/* Ticket number + channel */}
+          <div className="shrink-0">
             <span className="font-bold text-gray-900 text-lg">{ticket.ticket_number}</span>
             <span className="ml-2 text-sm text-gray-400">·</span>
-            <span className="ml-2 text-sm text-gray-500 truncate max-w-xs">{ticket.requester_area}</span>
+            <span className="ml-2 text-sm text-gray-500">{ticket.requester_area}</span>
+          </div>
+
+          {/* Divider */}
+          <div className="h-6 w-px bg-gray-200 shrink-0" />
+
+          {/* Solicitante */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
+              {ticket.requester_name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 hidden md:block">
+              <p className="text-xs font-semibold text-gray-800 leading-none truncate">{ticket.requester_name}</p>
+              <p className="text-xs text-gray-400 truncate">{ticket.requester_email}</p>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-6 w-px bg-gray-200 shrink-0 hidden md:block" />
+
+          {/* Agente */}
+          <div className="hidden md:flex items-center gap-1.5 shrink-0">
+            {ticket.assigned_agent ? (
+              <>
+                <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center text-green-700 text-xs font-bold shrink-0">
+                  {ticket.assigned_agent.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-xs font-medium text-gray-700 truncate max-w-24">{ticket.assigned_agent.name}</span>
+              </>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Sin asignar</span>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="h-6 w-px bg-gray-200 shrink-0 hidden md:block" />
+
+          {/* Creado */}
+          <div className="hidden md:flex items-center gap-1 text-xs text-gray-500 shrink-0">
+            <Clock size={12} className="text-gray-400 shrink-0" />
+            {new Date(ticket.created_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Estado badge */}
           <span
-            className="px-3 py-1 rounded-full text-xs font-semibold border"
+            className="hidden sm:inline px-3 py-1 rounded-full text-xs font-semibold border"
             style={{ backgroundColor: ticket.status.color + '22', color: ticket.status.color, borderColor: ticket.status.color + '55' }}
           >
             {ticket.status.name}
           </span>
           {/* Prioridad badge */}
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${prioConf.bg} ${prioConf.color}`}>
+          <span className={`hidden sm:inline px-3 py-1 rounded-full text-xs font-semibold border ${prioConf.bg} ${prioConf.color}`}>
             <span className={`inline-block w-2 h-2 rounded-full mr-1 ${prioConf.dot}`} />
             {prioConf.label}
           </span>
-          {/* Toggle info panel */}
+          {/* Trazabilidad button */}
           <button
-            onClick={() => setShowInfoPanel(v => !v)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition"
-            title="Información del ticket"
+            onClick={() => setShowTraceability(true)}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 transition"
+            title="Ver trazabilidad"
           >
-            {showInfoPanel ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            <History size={14} />
+            Trazabilidad
           </button>
+          {/* Trazabilidad — mobile icon only */}
+          <button
+            onClick={() => setShowTraceability(true)}
+            className="sm:hidden p-1.5 rounded-lg hover:bg-violet-50 text-violet-600 transition"
+            title="Trazabilidad"
+          >
+            <History size={18} />
+          </button>
+
+          {/* Sidebar toggle — visible only on mobile when canAct */}
+          {canAct && (
+            <button
+              onClick={() => setShowSidebar(v => !v)}
+              className={`lg:hidden p-1.5 rounded-lg transition ${showSidebar ? 'bg-violet-100 text-violet-600' : 'hover:bg-gray-100 text-gray-500'}`}
+              title="Panel de gestión"
+            >
+              <SlidersHorizontal size={18} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -462,49 +648,6 @@ export default function TicketDetailPage() {
         {/* ── Chat / Timeline ───────────────────────────────────────── */}
         <div className="flex flex-col flex-1 overflow-hidden">
 
-          {/* Collapsible info panel */}
-          {showInfoPanel && (
-            <div className="bg-white border-b px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Solicitante</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
-                    {ticket.requester_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 leading-none">{ticket.requester_name}</p>
-                    <p className="text-xs text-gray-400">{ticket.requester_email}</p>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Área</p>
-                <p className="text-sm font-medium text-gray-900">{ticket.requester_area}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Agente</p>
-                <div className="flex items-center gap-1.5">
-                  {ticket.assigned_agent ? (
-                    <>
-                      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-green-700 text-xs font-bold shrink-0">
-                        {ticket.assigned_agent.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">{ticket.assigned_agent.name}</span>
-                    </>
-                  ) : (
-                    <span className="text-sm text-gray-400 italic">Sin asignar</span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Creado</p>
-                <div className="flex items-center gap-1 text-sm text-gray-600">
-                  <Clock size={13} className="text-gray-400" />
-                  {new Date(ticket.created_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
@@ -537,7 +680,7 @@ export default function TicketDetailPage() {
                   </div>
 
                   {/* Bubble */}
-                  <div className={`max-w-[70%] ${isRequester ? '' : ''}`}>
+                  <div className={`max-w-[85%] sm:max-w-[70%]`}>
                     <div className="flex items-baseline gap-2 mb-1">
                       <span className="text-xs font-semibold text-gray-700">{event.author}</span>
                       <span className="text-xs text-gray-400">
@@ -552,8 +695,49 @@ export default function TicketDetailPage() {
                         ? 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'
                         : 'bg-violet-600 text-white rounded-tr-sm'
                     }`}>
-                      {event.content}
+                      {renderText(event.content, !isRequester)}
                     </div>
+
+                    {/* Attachments — múltiples archivos por comentario */}
+                    {(event.attachments ?? []).length > 0 && (() => {
+                      const atts = event.attachments ?? [];
+                      const imgs = atts.filter(a => isImage(a.url, a.mime));
+                      const files = atts.filter(a => !isImage(a.url, a.mime));
+                      return (
+                        <div className="mt-2 space-y-1.5">
+                          {/* Image grid */}
+                          {imgs.length > 0 && (
+                            <div className={`grid gap-1 ${imgs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`} style={{ maxWidth: imgs.length === 1 ? 240 : 300 }}>
+                              {imgs.map((att, i) => (
+                                <img
+                                  key={i}
+                                  src={att.url}
+                                  alt={att.name}
+                                  className={`w-full object-cover cursor-pointer hover:opacity-90 transition shadow-sm border border-white/30 ${
+                                    imgs.length === 1 ? 'rounded-xl max-h-48' :
+                                    imgs.length === 2 ? 'h-28 rounded-lg' :
+                                    imgs.length === 3 && i === 0 ? 'col-span-2 h-32 rounded-lg' : 'h-28 rounded-lg'
+                                  }`}
+                                  onClick={() => setImageModal(att.url)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          {/* File attachments */}
+                          {files.map((att, i) => (
+                            <a
+                              key={i}
+                              href={att.url}
+                              download={att.name}
+                              className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-200 transition w-fit"
+                            >
+                              <Paperclip size={14} />
+                              <span className="truncate max-w-48">{att.name}</span>
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {/* Attachment — ticket original */}
                     {event.meta && (
@@ -608,6 +792,29 @@ export default function TicketDetailPage() {
 
           {/* ── Reply box ──────────────────────────────────────────── */}
           <div className="border-t bg-white px-4 py-3 shrink-0">
+
+            {/* Channel selector */}
+            {canAct && (
+              <div className="flex items-center gap-1 mb-2">
+                <span className="text-xs text-gray-400 mr-1">Responder por:</span>
+                {([
+                  { key: 'portal',    label: 'Portal',    Icon: Globe,         cls: 'text-violet-600 bg-violet-50 border-violet-200' },
+                  { key: 'email',     label: 'Email',     Icon: Mail,          cls: 'text-blue-600 bg-blue-50 border-blue-200' },
+                  { key: 'whatsapp',  label: 'WhatsApp',  Icon: MessageCircle, cls: 'text-green-600 bg-green-50 border-green-200' },
+                ] as const).map(({ key, label, Icon, cls }) => (
+                  <button
+                    key={key}
+                    onClick={() => setReplyChannel(key)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${
+                      replyChannel === key ? cls : 'text-gray-400 bg-white border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon size={11} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* KB search panel */}
             {showKbSearch && canAct && (
@@ -682,6 +889,39 @@ export default function TicketDetailPage() {
               </div>
             )}
 
+            {/* Preview archivos adjuntos */}
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-1 mb-1">
+                {attachedFiles.map((f, i) => (
+                  <div key={i} className="relative group">
+                    {f.type.startsWith('image/') ? (
+                      <div className="relative">
+                        <img
+                          src={URL.createObjectURL(f)}
+                          alt={f.name}
+                          className="w-16 h-16 object-cover rounded-xl border border-blue-200 shadow-sm"
+                        />
+                        <button
+                          onClick={() => setAttachedFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow"
+                        >
+                          <XCircle size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl">
+                        <Paperclip size={14} className="text-blue-600 shrink-0" />
+                        <span className="text-xs text-blue-700 font-medium truncate max-w-28">{f.name}</span>
+                        <button onClick={() => setAttachedFiles(prev => prev.filter((_, j) => j !== i))} className="text-blue-400 hover:text-red-500 shrink-0">
+                          <XCircle size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-end gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100 transition">
               <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 text-xs font-bold shrink-0">
                 {currentUser?.name?.charAt(0).toUpperCase()}
@@ -694,6 +934,27 @@ export default function TicketDetailPage() {
                 className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm p-0 min-h-[40px] max-h-32"
                 rows={1}
               />
+              {/* Input oculto para archivos */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="*/*"
+                multiple
+                onChange={e => {
+                  const newFiles = Array.from(e.target.files ?? []);
+                  setAttachedFiles(prev => [...prev, ...newFiles]);
+                  e.target.value = '';
+                }}
+              />
+              {/* Botón adjuntar archivo */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                title="Adjuntar archivo"
+                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition"
+              >
+                <Paperclip size={16} />
+              </button>
               {/* Botón KB — solo para admins/agentes */}
               {canAct && (
                 <button
@@ -711,7 +972,7 @@ export default function TicketDetailPage() {
               <Button
                 size="sm"
                 onClick={handleSendComment}
-                disabled={!newComment.trim() || actionLoading === 'comment'}
+                disabled={(!newComment.trim() && attachedFiles.length === 0) || actionLoading === 'comment'}
                 className="shrink-0 rounded-xl"
               >
                 {actionLoading === 'comment' ? (
@@ -724,31 +985,67 @@ export default function TicketDetailPage() {
           </div>
         </div>
 
-        {/* ── Right sidebar — Actions ────────────────────────────────── */}
+        {/* ── Right sidebar ──────────────────────────────────────────── */}
+        {canAct && showSidebar && (
+          <div
+            className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+            onClick={() => setShowSidebar(false)}
+          />
+        )}
         {canAct && (
-          <div className="w-72 shrink-0 bg-white border-l overflow-y-auto flex flex-col">
-            <div className="p-4 border-b">
-              <h3 className="font-semibold text-gray-800 text-sm">Acciones del Ticket</h3>
+          <div className={`
+            w-72 shrink-0 bg-white border-l overflow-y-auto flex flex-col z-50
+            fixed inset-y-0 right-0 transition-transform duration-200
+            lg:static lg:translate-x-0
+            ${showSidebar ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+          `}>
+
+            {/* Close button — mobile only */}
+            <div className="flex items-center justify-between px-4 py-2 border-b lg:hidden">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Panel de gestión</span>
+              <button onClick={() => setShowSidebar(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+                <XCircle size={16} />
+              </button>
             </div>
 
-            <div className="p-4 space-y-6 flex-1">
+            {/* ── Metadata strip ─────────────────────── */}
+            <div className="px-4 py-3 bg-gray-50 border-b grid grid-cols-2 gap-x-4 gap-y-1.5">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Código</p>
+                <p className="text-xs font-mono font-semibold text-gray-700">{ticket.verification_code}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Comentarios</p>
+                <p className="text-xs font-semibold text-gray-700">{comments.length}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Creado</p>
+                <p className="text-xs text-gray-600">{new Date(ticket.created_at).toLocaleDateString('es')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Actualizado</p>
+                <p className="text-xs text-gray-600">{new Date(ticket.updated_at).toLocaleDateString('es')}</p>
+              </div>
+            </div>
 
-              {/* Asignar ──────────────────────────────── */}
+            <div className="p-4 space-y-5 flex-1">
+
+              {/* ── Asignación ─────────────────────────── */}
               <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <UserCheck size={15} className="text-blue-500" />
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Asignar agente</span>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <UserCheck size={14} className="text-blue-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Asignación</span>
                 </div>
                 <div className="space-y-2">
                   <Select value={assignUserId} onValueChange={setAssignUserId}>
-                    <SelectTrigger className="text-sm h-9">
+                    <SelectTrigger className="text-sm h-8">
                       <SelectValue placeholder="Selecciona agente..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {agentUsers.map(u => (
+                      {agentUsers.filter(u => u.role?.name !== 'usuario').map(u => (
                         <SelectItem key={u.id} value={u.id.toString()}>
                           <div className="flex items-center gap-2">
-                            <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
+                            <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
                               {u.name.charAt(0).toUpperCase()}
                             </div>
                             {u.name}
@@ -757,10 +1054,9 @@ export default function TicketDetailPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <div>
-                    <Label className="text-xs text-gray-500 mb-1 block">Prioridad</Label>
+                  <div className="flex gap-2">
                     <Select value={assignPriority} onValueChange={setAssignPriority}>
-                      <SelectTrigger className="text-sm h-9">
+                      <SelectTrigger className="text-sm h-8 flex-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -769,29 +1065,24 @@ export default function TicketDetailPage() {
                         <SelectItem value="baja"><span className="text-green-500 font-medium">● Baja</span></SelectItem>
                       </SelectContent>
                     </Select>
+                    <Button size="sm" className="h-8 px-3" onClick={handleAssign} disabled={!assignUserId || actionLoading === 'assign'}>
+                      {actionLoading === 'assign' ? '...' : 'Asignar'}
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={handleAssign}
-                    disabled={!assignUserId || actionLoading === 'assign'}
-                  >
-                    {actionLoading === 'assign' ? 'Asignando...' : 'Asignar'}
-                  </Button>
                 </div>
               </section>
 
               <div className="border-t" />
 
-              {/* Cambiar estado ───────────────────────── */}
+              {/* ── Estado ─────────────────────────────── */}
               <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <Tag size={15} className="text-purple-500" />
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cambiar estado</span>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Tag size={14} className="text-purple-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</span>
                 </div>
-                <div className="space-y-2">
+                <div className="flex gap-2">
                   <Select value={statusId} onValueChange={setStatusId}>
-                    <SelectTrigger className="text-sm h-9">
+                    <SelectTrigger className="text-sm h-8 flex-1">
                       <SelectValue placeholder="Estado..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -805,75 +1096,120 @@ export default function TicketDetailPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleUpdateStatus}
-                    disabled={!statusId || actionLoading === 'status'}
-                  >
-                    {actionLoading === 'status' ? 'Actualizando...' : 'Actualizar estado'}
+                  <Button size="sm" variant="outline" className="h-8 px-3" onClick={handleUpdateStatus} disabled={!statusId || actionLoading === 'status'}>
+                    {actionLoading === 'status' ? '...' : 'Aplicar'}
                   </Button>
                 </div>
               </section>
 
               <div className="border-t" />
 
-              {/* Acciones rápidas ─────────────────────── */}
+              {/* ── Participantes ──────────────────────── */}
               <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle size={15} className="text-orange-500" />
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones rápidas</span>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Users size={14} className="text-teal-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Participantes</span>
                 </div>
-                <div className="space-y-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
-                    onClick={handleEscalate}
-                    disabled={actionLoading === 'escalate'}
-                  >
-                    <TrendingUp size={14} className="mr-2" />
-                    {actionLoading === 'escalate' ? 'Escalando...' : 'Escalar ticket'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="w-full"
-                    onClick={handleClose}
-                    disabled={actionLoading === 'close'}
-                  >
-                    <XCircle size={14} className="mr-2" />
-                    {actionLoading === 'close' ? 'Cerrando...' : 'Cerrar ticket'}
-                  </Button>
+                {participants.length > 0 && (
+                  <ul className="mb-2 space-y-1.5">
+                    {participants.map(p => (
+                      <li key={p.id} className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center shrink-0">
+                          {p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 truncate text-xs">{p.name}</p>
+                          <p className="text-gray-400 truncate text-xs">{p.email}</p>
+                        </div>
+                        <button onClick={() => handleRemoveParticipant(p.id)} className="shrink-0 text-gray-300 hover:text-red-400 transition" title="Quitar">
+                          <Trash2 size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {participants.length === 0 && (
+                  <p className="text-xs text-gray-400 mb-2">Sin participantes adicionales.</p>
+                )}
+                <div className="relative">
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 focus-within:border-teal-400 transition">
+                    <UserPlus size={13} className="text-gray-400 shrink-0" />
+                    <input
+                      type="text"
+                      value={participantSearch}
+                      onChange={e => searchParticipants(e.target.value)}
+                      placeholder="Buscar funcionario..."
+                      className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+                    />
+                    {addingParticipant && <div className="w-3 h-3 border-2 border-teal-400 border-t-transparent rounded-full animate-spin shrink-0" />}
+                  </div>
+                  {participantResults.length > 0 && (
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                      {participantResults.map(u => (
+                        <button key={u.id} onClick={() => handleAddParticipant(u)} className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-teal-50 transition">
+                          <div className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center shrink-0">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-gray-800 truncate">{u.name}</p>
+                            <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </section>
 
               <div className="border-t" />
 
-              {/* Info extra ───────────────────────────── */}
-              <section className="text-xs text-gray-400 space-y-1.5">
-                <div className="flex justify-between">
-                  <span>Código:</span>
-                  <span className="font-mono font-semibold text-gray-600">{ticket.verification_code}</span>
+              {/* ── Reuniones ──────────────────────────── */}
+              {ticket && (
+                <TicketMeetingsPanel
+                  ticketId={ticket.id}
+                  requesterEmail={ticket.requester_email}
+                  requesterName={ticket.requester_name}
+                />
+              )}
+
+              <div className="border-t" />
+
+              {/* ── Escritorio Remoto ──────────────────── */}
+              <RemoteSessionPanel ticketId={ticket.id} />
+
+              <div className="border-t" />
+
+              {/* ── Acciones ───────────────────────────── */}
+              <section>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <AlertCircle size={14} className="text-orange-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Creado:</span>
-                  <span className="text-gray-500">{new Date(ticket.created_at).toLocaleDateString('es')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Actualizado:</span>
-                  <span className="text-gray-500">{new Date(ticket.updated_at).toLocaleDateString('es')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Comentarios:</span>
-                  <span className="text-gray-500">{comments.length}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" className="border-orange-200 text-orange-700 hover:bg-orange-50 text-xs" onClick={handleEscalate} disabled={actionLoading === 'escalate'}>
+                    <TrendingUp size={13} className="mr-1.5" />
+                    {actionLoading === 'escalate' ? '...' : 'Escalar'}
+                  </Button>
+                  <Button size="sm" variant="destructive" className="text-xs" onClick={handleClose} disabled={actionLoading === 'close'}>
+                    <XCircle size={13} className="mr-1.5" />
+                    {actionLoading === 'close' ? '...' : 'Cerrar'}
+                  </Button>
                 </div>
               </section>
+
             </div>
           </div>
         )}
       </div>
+
+      {/* ── Traceability Drawer ───────────────────────────────────── */}
+      {showTraceability && ticket && (
+        <TicketTraceabilityDrawer
+          ticketId={ticket.id}
+          ticketNumber={ticket.ticket_number}
+          onClose={() => setShowTraceability(false)}
+        />
+      )}
 
       {/* ── Image Modal ───────────────────────────────────────────── */}
       {imageModal && (

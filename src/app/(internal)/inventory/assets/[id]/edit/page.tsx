@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { assetsApi, Asset, AssetTypeField, Location } from '@/lib/assets-api';
+import api from '@/lib/api';
+import { assetsApi, Asset, AssetTypeField, Area } from '@/lib/assets-api';
 import { ArrowLeft, Save } from 'lucide-react';
 
 export default function EditAssetPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +14,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   const router = useRouter();
   const [asset, setAsset] = useState<Asset | null>(null);
   const [typeFields, setTypeFields] = useState<AssetTypeField[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +23,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
     internal_code: '',
     serial_number: '',
     inventory_tag: '',
-    location_id: '',
+    area_id: '',
     vendor: '',
     purchase_date: '',
     warranty_end_date: '',
@@ -35,16 +36,16 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
   useEffect(() => {
     Promise.all([
       assetsApi.getAsset(Number(id)),
-      assetsApi.getLocations(),
-    ]).then(([{ data: asset }, { data: locs }]) => {
+      api.get('/areas'),
+    ]).then(([{ data: asset }, { data: areasData }]) => {
       setAsset(asset);
-      setLocations(locs);
+      setAreas(Array.isArray(areasData) ? areasData : (areasData.data ?? []));
       setForm({
         name: asset.name,
         internal_code: asset.internal_code ?? '',
         serial_number: asset.serial_number ?? '',
         inventory_tag: asset.inventory_tag ?? '',
-        location_id: asset.location_id ? String(asset.location_id) : '',
+        area_id: asset.area_id ? String(asset.area_id) : '',
         vendor: asset.vendor ?? '',
         purchase_date: asset.purchase_date ?? '',
         warranty_end_date: asset.warranty_end_date ?? '',
@@ -74,7 +75,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
       const fv = typeFields.map(f => ({ field_id: f.id, value: fieldValues[f.id] ?? '' }));
       await assetsApi.updateAsset(Number(id), {
         ...form,
-        location_id: form.location_id ? Number(form.location_id) : null,
+        area_id: form.area_id ? Number(form.area_id) : null,
         field_values: fv,
       });
       router.push(`/inventory/assets/${id}`);
@@ -129,15 +130,15 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
               <Input className="mt-1" value={form.inventory_tag} onChange={e => setForm(f => ({ ...f, inventory_tag: e.target.value }))} />
             </div>
             <div>
-              <Label>Ubicación</Label>
+              <Label>Área / Ubicación</Label>
               <select
                 className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                value={form.location_id}
-                onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))}
+                value={form.area_id}
+                onChange={e => setForm(f => ({ ...f, area_id: e.target.value }))}
               >
-                <option value="">Sin ubicación</option>
-                {locations.map(l => (
-                  <option key={l.id} value={l.id}>{l.area?.name} — {l.name}</option>
+                <option value="">Sin área</option>
+                {areas.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
             </div>

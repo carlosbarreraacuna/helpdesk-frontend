@@ -25,13 +25,9 @@ export interface AssetTypeField {
   order_index: number;
 }
 
-export interface Location {
+export interface Area {
   id: number;
-  area_id: number;
   name: string;
-  description: string | null;
-  is_active: boolean;
-  area?: { id: number; name: string };
 }
 
 export interface ServiceProvider {
@@ -62,7 +58,7 @@ export interface Asset {
   serial_number: string | null;
   inventory_tag: string | null;
   status: AssetStatus;
-  location_id: number | null;
+  area_id: number | null;
   current_user_id: number | null;
   vendor: string | null;
   purchase_date: string | null;
@@ -74,7 +70,7 @@ export interface Asset {
   created_at: string;
   updated_at: string;
   asset_type?: AssetType;
-  location?: Location;
+  area?: Area;
   current_user?: { id: number; name: string; email: string };
   field_values?: AssetFieldValue[];
   active_assignment?: AssetAssignment;
@@ -164,12 +160,6 @@ export const assetsApi = {
   updateTypeField: (typeId: number, fieldId: number, data: Partial<AssetTypeField>) => api.patch<AssetTypeField>(`/assets/types/${typeId}/fields/${fieldId}`, data),
   deleteTypeField: (typeId: number, fieldId: number) => api.delete(`/assets/types/${typeId}/fields/${fieldId}`),
 
-  // Locations
-  getLocations: () => api.get<Location[]>('/locations'),
-  getLocationsByArea: (areaId: number) => api.get<Location[]>(`/areas/${areaId}/locations`),
-  createLocation: (areaId: number, data: Partial<Location>) => api.post<Location>(`/areas/${areaId}/locations`, data),
-  updateLocation: (id: number, data: Partial<Location>) => api.patch<Location>(`/locations/${id}`, data),
-  deleteLocation: (id: number) => api.delete(`/locations/${id}`),
 
   // Service Providers
   getProviders: () => api.get<ServiceProvider[]>('/service-providers'),
@@ -183,7 +173,7 @@ export const assetsApi = {
   createAsset: (data: Record<string, unknown>) => api.post<Asset>('/assets', data),
   updateAsset: (id: number, data: Record<string, unknown>) => api.patch<Asset>(`/assets/${id}`, data),
   updateAssetStatus: (id: number, status: AssetStatus, notes?: string) => api.patch<Asset>(`/assets/${id}/status`, { status, notes }),
-  updateAssetLocation: (id: number, locationId: number, reason?: string) => api.patch<Asset>(`/assets/${id}/location`, { location_id: locationId, reason }),
+  updateAssetLocation: (id: number, areaId: number, reason?: string) => api.patch<Asset>(`/assets/${id}/location`, { area_id: areaId, reason }),
   deleteAsset: (id: number) => api.delete(`/assets/${id}`),
 
   // Asset Events & History

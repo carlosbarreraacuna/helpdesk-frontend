@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/select';
 import CreateTicketModal from '@/components/CreateTicketModal';
 import api from '@/lib/api';
+import { getEcho } from '@/lib/echo';
+import { useAuthStore } from '@/lib/auth-store';
 import {
   ChevronLeft,
   ChevronRight,
@@ -32,6 +34,7 @@ interface Ticket {
   requester_email: string;
   description: string;
   priority: string;
+  is_read: boolean;
   status: {
     id: number;
     name: string;
@@ -92,16 +95,51 @@ export default function TicketsPage() {
   });
 
   useEffect(() => {
-    loadTickets(true); // Carga inicial
+    loadTickets(true);
     loadStatuses();
     loadAreas();
-  }, []); // Solo al montar
+  }, []);
 
   useEffect(() => {
-    if (!loading) { // Evitar carga inicial duplicada
-      loadTickets(false); // Cargas por filtros
+    if (!loading) {
+      loadTickets(false);
     }
   }, [filters]);
+
+  // Escuchar nuevos tickets en tiempo real via Pusher directo
+  useEffect(() => {
+    const token = useAuthStore.getState().token;
+    if (!token) return;
+
+    const echo = getEcho(token);
+    // Usamos el canal Pusher directamente para evitar problemas de cleanup con Echo
+    const pusher = (echo as any).connector?.pusher;
+    if (!pusher) return;
+
+    // Suscribir si no está ya suscrito
+    const ch = pusher.subscribe('tickets.admin');
+    const handler = (data: any) => {
+      const incoming = data?.ticket;
+      if (!incoming) return;
+      // Fetch full ticket and prepend to list (Gmail-style)
+      api.get(`/tickets/${incoming.id}/peek`).then(r => {
+        const full = r.data;
+        setTickets(prev => {
+          if (prev.some(t => t.id === full.id)) return prev;
+          return [full, ...prev];
+        });
+        setPagination(prev => ({ ...prev, total: prev.total + 1 }));
+      }).catch(() => {
+        // Fallback: full reload if fetch fails
+        setFilters(prev => ({ ...prev }));
+      });
+    };
+    ch.bind('ticket.created', handler);
+
+    return () => {
+      ch.unbind('ticket.created', handler);
+    };
+  }, []);
 
   const loadTickets = async (isInitial = false) => {
     if (isInitial) {
@@ -257,7 +295,7 @@ export default function TicketsPage() {
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -333,56 +371,69 @@ export default function TicketsPage() {
             </div>
           ) : (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50/50">
                     <TableHead className="py-2 px-3 text-xs font-medium">Código</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium">Solicitante</TableHead>
-                    <TableHead className="py-2 px-3 text-xs font-medium">Asunto</TableHead>
-                    <TableHead className="py-2 px-3 text-xs font-medium">Prioridad</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden sm:table-cell">Asunto</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden md:table-cell">Prioridad</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium">Estado</TableHead>
-                    <TableHead className="py-2 px-3 text-xs font-medium">Asignado a</TableHead>
-                    <TableHead className="py-2 px-3 text-xs font-medium">Área</TableHead>
-                    <TableHead className="py-2 px-3 text-xs font-medium">Fecha</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden lg:table-cell">Asignado a</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden lg:table-cell">Área</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden md:table-cell">Fecha</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {tickets.map((ticket) => (
-                    <TableRow key={ticket.id} className="hover:bg-gray-50/50 border-b border-gray-100">
+                    <TableRow
+                      key={ticket.id}
+                      className={`border-b border-gray-100 transition-colors ${
+                        !ticket.is_read
+                          ? 'bg-blue-50/60 hover:bg-blue-50'
+                          : 'hover:bg-gray-50/50'
+                      }`}
+                    >
                       <TableCell className="py-2 px-3">
-                        <span className="text-xs font-mono text-gray-600">
-                          {ticket.ticket_number}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2 px-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{ticket.requester_name}</p>
-                          <p className="text-xs text-gray-500 truncate">{ticket.requester_email}</p>
+                        <div className="flex items-center gap-1.5">
+                          {!ticket.is_read && (
+                            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" title="No leído" />
+                          )}
+                          <span className={`text-xs font-mono ${!ticket.is_read ? 'text-blue-700 font-semibold' : 'text-gray-600'}`}>
+                            {ticket.ticket_number}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="py-2 px-3">
-                        <p className="text-sm text-gray-900 max-w-xs truncate" title={ticket.description}>
+                        <div className="min-w-0">
+                          <p className={`text-sm truncate ${!ticket.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-900'}`}>{ticket.requester_name}</p>
+                          <p className="text-xs text-gray-500 truncate">{ticket.requester_email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 px-3 hidden sm:table-cell">
+                        <p className={`text-sm max-w-xs truncate ${!ticket.is_read ? 'font-medium text-gray-900' : 'text-gray-700'}`} title={ticket.description}>
                           {ticket.description}
                         </p>
                       </TableCell>
-                      <TableCell className="py-2 px-3">
+                      <TableCell className="py-2 px-3 hidden md:table-cell">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(ticket.priority)}`}>
                           {ticket.priority}
                         </span>
                       </TableCell>
                       <TableCell className="py-2 px-3">
-                        <span 
+                        <span
                           className="px-2 py-1 rounded-full text-xs font-medium"
-                          style={{ 
+                          style={{
                             backgroundColor: ticket.status.color + '20',
-                            color: ticket.status.color 
+                            color: ticket.status.color
                           }}
                         >
                           {ticket.status.name}
                         </span>
                       </TableCell>
-                      <TableCell className="py-2 px-3">
+                      <TableCell className="py-2 px-3 hidden lg:table-cell">
                         {ticket.assigned_agent ? (
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
@@ -396,15 +447,15 @@ export default function TicketsPage() {
                           <span className="text-xs text-gray-400">Sin asignar</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-2 px-3">
+                      <TableCell className="py-2 px-3 hidden lg:table-cell">
                         <span className="text-xs text-gray-600">
                           {ticket.area?.name || '-'}
                         </span>
                       </TableCell>
-                      <TableCell className="py-2 px-3">
+                      <TableCell className="py-2 px-3 hidden md:table-cell">
                         <span className="text-xs text-gray-600">
-                          {new Date(ticket.created_at).toLocaleDateString('es-ES', { 
-                            day: '2-digit', 
+                          {new Date(ticket.created_at).toLocaleDateString('es-ES', {
+                            day: '2-digit',
                             month: '2-digit',
                             year: '2-digit'
                           })}
@@ -424,6 +475,7 @@ export default function TicketsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {/* Pagination */}
               {pagination.last_page > 1 && (

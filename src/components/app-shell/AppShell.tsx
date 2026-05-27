@@ -51,45 +51,46 @@ const NavMenu = memo(function NavMenu({ items }: { items: MenuItem[] }) {
     return children?.some((c) => c.route !== '#' && pathname.startsWith(c.route)) ?? false;
   };
 
-  const getIcon = (name: string) => {
-    const IC = Icons[name as keyof typeof Icons] as React.ComponentType<{ size: number }>;
-    return typeof IC === 'function' ? <IC size={20} /> : <Icons.Circle size={20} />;
+  const getIcon = (name: string, size = 18) => {
+    const IC = Icons[name as keyof typeof Icons] as React.ElementType | undefined;
+    return IC ? <IC size={size} /> : <Icons.Circle size={size} />;
   };
 
   const renderItem = (item: MenuItem, level = 0): React.ReactNode => {
     const hasChildren = Boolean(item.children?.length);
     const expanded = expandedItems.includes(item.id);
     const active = isActive(item.route || '#', item.children);
+    const isChild = level > 0;
     return (
-      <div key={item.id} className="mb-1">
+      <div key={item.id}>
         <button
           onClick={() =>
             hasChildren ? toggleExpand(item.id) : item.route !== '#' && router.push(item.route)
           }
-          className={`w-full flex items-center justify-between px-6 py-3 text-sm font-medium transition-colors ${
+          className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
             active
               ? 'bg-gray-800 border-r-4 border-blue-500 text-white'
               : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-          } ${level > 0 ? 'pl-12' : ''}`}
+          } ${isChild ? 'text-xs py-2' : ''}`}
         >
-          <div className="flex items-center gap-3">
-            <span className={active ? 'text-white' : 'text-gray-400'}>{getIcon(item.icon)}</span>
-            <span>{item.label}</span>
-            {item.metadata?.badge && (
-              <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                {item.metadata.badge}
-              </span>
-            )}
-          </div>
+          <span className={`shrink-0 ${active ? 'text-blue-400' : 'text-gray-400'}`}>
+            {getIcon(item.icon, isChild ? 15 : 18)}
+          </span>
+          <span className="truncate flex-1 text-left">{item.label}</span>
+          {item.metadata?.badge && (
+            <span className="shrink-0 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">
+              {item.metadata.badge}
+            </span>
+          )}
           {hasChildren && (
             <Icons.ChevronDown
-              size={16}
-              className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
+              size={14}
+              className={`shrink-0 ml-auto transition-transform ${expanded ? 'rotate-180' : ''}`}
             />
           )}
         </button>
         {hasChildren && expanded && (
-          <div className="bg-gray-800 border-l-2 border-gray-700">
+          <div className="bg-gray-800/60 border-l-2 border-gray-700 ml-4">
             {item.children!.map((child) => renderItem(child, level + 1))}
           </div>
         )}
@@ -110,13 +111,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
   const router = useRouter();
 
+  const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(_cachedMenuItems);
 
-  // Auth check — solo si no hay token
+  useEffect(() => { setMounted(true); }, []);
+
+  // Auth check — si no hay token, limpiar estado zustand stale antes de redirigir
   useEffect(() => {
     const storedToken = localStorage.getItem('auth-token');
     if (!storedToken) {
+      useAuthStore.getState().clearAuth();
       router.push('/login');
     }
   }, [router]);
@@ -192,8 +197,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>
       </div>
 
-      {/* Widgets */}
-      {user && token && (
+      {/* Widgets — solo tras hidratación para evitar mismatch de IDs de Radix */}
+      {mounted && user && token && (
         <>
           <HelpdeskWidget user={{ id: user.id, name: user.name, token }} />
           <TicketNotifications token={token} userRole={user.role?.name ?? ''} />

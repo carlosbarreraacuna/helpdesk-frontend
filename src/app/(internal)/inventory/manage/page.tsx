@@ -4,13 +4,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { assetsApi, AssetType, Location, ServiceProvider } from '@/lib/assets-api';
-import { Plus, Pencil, Trash2, Package, MapPin, Building2, ChevronDown, ChevronRight } from 'lucide-react';
-import api from '@/lib/api';
+import { assetsApi, AssetType, ServiceProvider } from '@/lib/assets-api';
+import { Plus, Pencil, Trash2, Package, Building2 } from 'lucide-react';
 
-interface Area { id: number; name: string; }
-
-type Tab = 'types' | 'locations' | 'providers';
+type Tab = 'types' | 'providers';
 
 export default function InventoryManagePage() {
   const [tab, setTab] = useState<Tab>('types');
@@ -19,12 +16,6 @@ export default function InventoryManagePage() {
   const [types, setTypes] = useState<AssetType[]>([]);
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeDisplay, setNewTypeDisplay] = useState('');
-
-  // Locations
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [newLocArea, setNewLocArea] = useState('');
-  const [newLocName, setNewLocName] = useState('');
 
   // Providers
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
@@ -36,9 +27,7 @@ export default function InventoryManagePage() {
 
   useEffect(() => {
     assetsApi.getTypes().then(({ data }) => setTypes(data));
-    assetsApi.getLocations().then(({ data }) => setLocations(data));
     assetsApi.getProviders().then(({ data }) => setProviders(data));
-    api.get<Area[]>('/areas').then(({ data }) => setAreas(data));
   }, []);
 
   // ── Types ──────────────────────────────────────────────────────────────────
@@ -65,25 +54,6 @@ export default function InventoryManagePage() {
       await assetsApi.deleteType(id);
       setTypes(prev => prev.filter(t => t.id !== id));
     } catch { setError('No se puede eliminar este tipo.'); }
-  };
-
-  // ── Locations ──────────────────────────────────────────────────────────────
-  const handleCreateLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLocArea || !newLocName) return;
-    setSaving(true); setError('');
-    try {
-      const { data } = await assetsApi.createLocation(Number(newLocArea), { name: newLocName });
-      setLocations(prev => [...prev, data]);
-      setNewLocName('');
-    } catch { setError('Error al crear ubicación.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDeleteLocation = async (id: number) => {
-    if (!confirm('¿Desactivar esta ubicación?')) return;
-    await assetsApi.deleteLocation(id);
-    setLocations(prev => prev.filter(l => l.id !== id));
   };
 
   // ── Providers ──────────────────────────────────────────────────────────────
@@ -123,7 +93,7 @@ export default function InventoryManagePage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Configuración de Inventario</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Tipos de activos, ubicaciones y proveedores de servicio</p>
+        <p className="text-sm text-gray-500 mt-0.5">Tipos de activos y proveedores de servicio</p>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2 rounded">{error}</div>}
@@ -132,9 +102,6 @@ export default function InventoryManagePage() {
       <div className="border-b border-gray-200 flex gap-6">
         <button className={tabClass('types')} onClick={() => setTab('types')}>
           <Package className="inline h-4 w-4 mr-1.5" />Tipos de Activos
-        </button>
-        <button className={tabClass('locations')} onClick={() => setTab('locations')}>
-          <MapPin className="inline h-4 w-4 mr-1.5" />Ubicaciones
         </button>
         <button className={tabClass('providers')} onClick={() => setTab('providers')}>
           <Building2 className="inline h-4 w-4 mr-1.5" />Proveedores
@@ -192,63 +159,6 @@ export default function InventoryManagePage() {
                           <Trash2 className="h-4 w-4 text-red-400" />
                         </Button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── Locations Tab ── */}
-      {tab === 'locations' && (
-        <div className="space-y-4">
-          <form onSubmit={handleCreateLocation} className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="font-semibold text-gray-800 mb-4">Nueva Ubicación</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label>Área</Label>
-                <select
-                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-                  value={newLocArea}
-                  onChange={e => setNewLocArea(e.target.value)}
-                  required
-                >
-                  <option value="">Seleccionar área...</option>
-                  {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label>Nombre de la ubicación</Label>
-                <Input className="mt-1" placeholder="Ej: Sala de servidores piso 3" value={newLocName} onChange={e => setNewLocName(e.target.value)} required />
-              </div>
-            </div>
-            <div className="mt-3 flex justify-end">
-              <Button type="submit" disabled={saving} className="gap-2"><Plus className="h-4 w-4" />Agregar Ubicación</Button>
-            </div>
-          </form>
-
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Área</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {locations.length === 0 ? (
-                  <tr><td colSpan={3} className="text-center py-8 text-gray-400">Sin ubicaciones registradas.</td></tr>
-                ) : locations.map(l => (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{l.name}</td>
-                    <td className="px-4 py-3 text-gray-500">{l.area?.name ?? '—'}</td>
-                    <td className="px-4 py-3 flex justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteLocation(l.id)}>
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </Button>
                     </td>
                   </tr>
                 ))}
