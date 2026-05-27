@@ -165,7 +165,7 @@ export default function UserTechProfilePage({ params }: { params: Promise<{ user
                 </div>
               </div>
               <div className="text-right">
-                {asset.location && <p className="text-xs text-gray-400">{asset.location.name}</p>}
+                {asset.area && <p className="text-xs text-gray-400">{asset.area.name}</p>}
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 mt-0.5">
                   Asignado
                 </span>

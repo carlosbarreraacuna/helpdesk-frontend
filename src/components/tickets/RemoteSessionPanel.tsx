@@ -125,7 +125,7 @@ export default function RemoteSessionPanel({ ticketId }: Props) {
           {/* Active sessions */}
           {activeSessions.map(s => {
             const cfg = TOOL_CONFIG[s.tool];
-            const link = cfg.deepLink(s.session_code);
+            const link = cfg.deepLink();
             return (
               <div key={s.id} className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2">
                 <div className="flex items-center justify-between">

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { meetingsApi } from '@/lib/meetings-api';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, AlertCircle, Video, ExternalLink, Loader2, Unlink } from 'lucide-react';
 
-export default function IntegrationsPage() {
+function IntegrationsContent() {
   const searchParams = useSearchParams();
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; email: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,5 +163,13 @@ export default function IntegrationsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function IntegrationsPage() {
+  return (
+    <Suspense>
+      <IntegrationsContent />
+    </Suspense>
   );
 }
