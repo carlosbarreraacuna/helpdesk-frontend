@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { Button } from '@/components/ui/button';
 import * as Icons from 'lucide-react';
@@ -24,6 +24,7 @@ export function Topbar({ sidebarOpen = true, onToggleSidebar }: TopbarProps) {
   const user = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
   const pathname = usePathname();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -80,8 +81,9 @@ export function Topbar({ sidebarOpen = true, onToggleSidebar }: TopbarProps) {
 
   const currentBreadcrumb = getCurrentBreadcrumb();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
   };
 
   return (
