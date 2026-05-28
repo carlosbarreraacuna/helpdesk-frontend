@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import * as Icons from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { Topbar } from './topbar';
-import HelpdeskWidget from '@/components/widget/HelpdeskWidget';
 import TicketNotifications from '@/components/TicketNotifications';
 import api from '@/lib/api';
 
@@ -197,12 +196,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>
       </div>
 
-      {/* Widgets — solo tras hidratación para evitar mismatch de IDs de Radix */}
+      {/* Notificaciones — solo tras hidratación para evitar mismatch de IDs de Radix */}
       {mounted && user && token && (
-        <>
-          <HelpdeskWidget user={{ id: user.id, name: user.name, token }} />
-          <TicketNotifications token={token} userRole={user.role?.name ?? ''} />
-        </>
+        <TicketNotifications token={token} userRole={user.role?.name ?? ''} />
       )}
     </div>
   );

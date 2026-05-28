@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
-import HelpdeskWidget from '@/components/widget/HelpdeskWidget';
 import TicketNotifications from '@/components/TicketNotifications';
 import { useAuthStore } from '@/lib/auth-store';
 import { useRouter } from 'next/navigation';
@@ -58,7 +57,6 @@ export default function ShellClient({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
-      <HelpdeskWidget user={{ id: user.id, name: user.name, token }} />
       {token && (
         <TicketNotifications token={token} userRole={user.role?.name ?? ''} />
       )}

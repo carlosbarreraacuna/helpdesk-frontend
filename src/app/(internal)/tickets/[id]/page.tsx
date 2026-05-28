@@ -15,7 +15,7 @@ import RemoteSessionPanel from '@/components/tickets/RemoteSessionPanel';
 import {
   ArrowLeft, Send, Clock, Tag, AlertCircle, CheckCircle2,
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
-  BookOpen, Search, ExternalLink,
+  BookOpen, Search, ExternalLink, RotateCcw,
   Mail, MessageCircle, Globe, Users, UserPlus, Trash2, SlidersHorizontal, History,
 } from 'lucide-react';
 
@@ -31,6 +31,9 @@ interface Ticket {
   priority: string;
   status: { id: number; name: string; color: string };
   assigned_agent?: { id: number; name: string; email: string };
+  work_group_id?: number | null;
+  work_group?: { id: number; name: string } | null;
+  category?: { id: number; name: string } | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,7 +75,7 @@ interface Comment {
   attachments?: CommentAttachment[];
 }
 
-type EventType = 'comment' | 'status_change' | 'assign' | 'escalate' | 'close' | 'open';
+type EventType = 'comment' | 'bot_context' | 'status_change' | 'assign' | 'escalate' | 'close' | 'open';
 
 interface WidgetMessage {
   id: number;
@@ -158,8 +161,15 @@ const [imageModal, setImageModal] = useState<string | null>(null);
   // KB search in reply box
   const [showKbSearch, setShowKbSearch] = useState(false);
   const [kbQuery, setKbQuery] = useState('');
-  const [kbResults, setKbResults] = useState<{ id: number; title: string; slug: string }[]>([]);
+  const [kbResults, setKbResults] = useState<{ id: number; title: string; slug: string; category?: { name: string } }[]>([]);
   const [kbSearching, setKbSearching] = useState(false);
+  const [kbSelectedArticle, setKbSelectedArticle] = useState<{
+    id: number; title: string; slug: string;
+    category?: { name: string }; author?: { name: string };
+    published_version?: { content: string }; views_count: number; useful_count: number;
+    tags?: { id: number; name: string }[];
+  } | null>(null);
+  const [kbLoadingArticle, setKbLoadingArticle] = useState(false);
   const kbDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -285,13 +295,31 @@ const [imageModal, setImageModal] = useState<string | null>(null);
     }, 350);
   };
 
-  const insertKbArticle = (article: { id: number; title: string }) => {
+  const openKbArticle = async (article: { id: number; title: string; slug: string; category?: { name: string } }) => {
+    setKbLoadingArticle(true);
+    setKbSelectedArticle(null);
+    try {
+      const res = await api.get(`/kb/articles/${article.id}`);
+      setKbSelectedArticle(res.data);
+    } catch {
+      setKbSelectedArticle({ ...article, views_count: 0, useful_count: 0 });
+    } finally {
+      setKbLoadingArticle(false);
+    }
+  };
+
+  const insertKbArticle = (article: { id: number; title: string; published_version?: { content: string } }) => {
     const BASE = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const link = `[📖 ${article.title}](${BASE}/portal/knowledge-base/${article.id})`;
-    setNewComment(prev => prev ? `${prev}\n\n${link}` : link);
+    const link = `${BASE}/knowledge-base/${article.id}`;
+    const content = article.published_version?.content?.trim();
+    const block = content
+      ? `📖 **${article.title}**\n\n${content}\n\n🔗 Ver artículo completo: ${link}`
+      : `📖 **${article.title}**\n\n🔗 Ver artículo completo: ${link}`;
+    setNewComment(prev => prev ? `${prev}\n\n${block}` : block);
     setShowKbSearch(false);
     setKbQuery('');
     setKbResults([]);
+    setKbSelectedArticle(null);
   };
 
   const flash = (msg: string) => {
@@ -355,6 +383,21 @@ const [imageModal, setImageModal] = useState<string | null>(null);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || 'Error al actualizar estado');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const handleReturnToGroup = async () => {
+    if (!confirm('¿Devolver este ticket a la cola del grupo?')) return;
+    setActionLoading('return');
+    try {
+      await api.post(`/tickets/${ticketId}/return-to-group`, { reason: 'Devuelto por el agente asignado.' });
+      await loadAll();
+      flash('Ticket devuelto al grupo');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error al devolver el ticket');
     } finally {
       setActionLoading('');
     }
@@ -432,10 +475,11 @@ const [imageModal, setImageModal] = useState<string | null>(null);
     });
 
     comments.forEach(c => {
+      const isBotContext = c.user === null && c.comment.startsWith('🤖');
       events.push({
         id: `c-${c.id}`,
-        type: 'comment',
-        author: c.user?.name ?? ticket.requester_name,
+        type: isBotContext ? 'bot_context' : 'comment',
+        author: isBotContext ? 'Asistente Virtual' : (c.user?.name ?? ticket.requester_name),
         content: c.comment,
         timestamp: c.created_at,
         attachments: c.attachments ?? [],
@@ -455,7 +499,11 @@ const [imageModal, setImageModal] = useState<string | null>(null);
       });
     });
 
-    return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return events.sort((a, b) => {
+      if (a.type === 'bot_context') return -1;
+      if (b.type === 'bot_context') return 1;
+      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+    });
   };
 
   const isImage = (p: string, mime?: string | null) =>
@@ -670,6 +718,25 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                 );
               }
 
+              if (event.type === 'bot_context') {
+                return (
+                  <div key={event.id} className="mx-2">
+                    <div className="border border-blue-200 bg-blue-50 rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-100 border-b border-blue-200">
+                        <BookOpen size={14} className="text-blue-600 shrink-0" />
+                        <span className="text-xs font-semibold text-blue-700">Conversación con el Asistente Virtual</span>
+                        <span className="ml-auto text-xs text-blue-400">
+                          {new Date(event.timestamp).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </div>
+                      <pre className="px-4 py-3 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap font-sans overflow-x-auto">
+                        {event.content}
+                      </pre>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={event.id} className={`flex gap-3 ${isRequester ? 'flex-row' : 'flex-row-reverse'}`}>
                   {/* Avatar */}
@@ -816,78 +883,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
               </div>
             )}
 
-            {/* KB search panel */}
-            {showKbSearch && canAct && (
-              <div className="mb-3 bg-white border border-blue-200 rounded-2xl shadow-lg overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-blue-100 bg-blue-50">
-                  <BookOpen size={14} className="text-blue-500 shrink-0" />
-                  <span className="text-xs font-semibold text-blue-700">Buscar en Base de Conocimiento</span>
-                  <button
-                    onClick={() => { setShowKbSearch(false); setKbQuery(''); setKbResults([]); }}
-                    className="ml-auto text-blue-400 hover:text-blue-700 transition"
-                  >
-                    <XCircle size={14} />
-                  </button>
-                </div>
-                <div className="p-2">
-                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
-                    <Search size={13} className="text-gray-400 shrink-0" />
-                    <input
-                      autoFocus
-                      type="text"
-                      value={kbQuery}
-                      onChange={e => searchKb(e.target.value)}
-                      placeholder="Buscar artículo..."
-                      className="flex-1 text-sm bg-transparent outline-none text-gray-800 placeholder:text-gray-400"
-                    />
-                    {kbSearching && (
-                      <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
-                    )}
-                  </div>
-
-                  {kbResults.length > 0 && (
-                    <ul className="mt-2 max-h-52 overflow-y-auto divide-y divide-gray-100">
-                      {kbResults.map(article => (
-                        <li key={article.id}>
-                          <button
-                            onClick={() => insertKbArticle(article)}
-                            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-blue-50 transition rounded-lg group"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <BookOpen size={13} className="text-blue-400 shrink-0" />
-                              <span className="text-sm text-gray-800 truncate">{article.title}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <a
-                                href={`/knowledge-base/${article.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={e => e.stopPropagation()}
-                                className="text-gray-300 hover:text-blue-500 transition"
-                                title="Abrir artículo"
-                              >
-                                <ExternalLink size={12} />
-                              </a>
-                              <span className="text-xs text-blue-600 font-medium opacity-0 group-hover:opacity-100 transition">
-                                Insertar
-                              </span>
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {kbQuery.length >= 2 && !kbSearching && kbResults.length === 0 && (
-                    <p className="text-xs text-gray-400 text-center py-3">Sin resultados para "{kbQuery}"</p>
-                  )}
-
-                  {kbQuery.length === 0 && (
-                    <p className="text-xs text-gray-400 text-center py-3">Escribe para buscar artículos publicados</p>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* KB drawer overlay trigger — panel is rendered outside this column */}
 
             {/* Preview archivos adjuntos */}
             {attachedFiles.length > 0 && (
@@ -1194,6 +1190,18 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                     <XCircle size={13} className="mr-1.5" />
                     {actionLoading === 'close' ? '...' : 'Cerrar'}
                   </Button>
+                  {currentUser?.role?.name === 'agente' && ticket?.work_group_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="col-span-2 border-blue-200 text-blue-700 hover:bg-blue-50 text-xs"
+                      onClick={handleReturnToGroup}
+                      disabled={actionLoading === 'return'}
+                    >
+                      <RotateCcw size={13} className="mr-1.5" />
+                      {actionLoading === 'return' ? '...' : 'Devolver al grupo'}
+                    </Button>
+                  )}
                 </div>
               </section>
 
@@ -1209,6 +1217,169 @@ const [imageModal, setImageModal] = useState<string | null>(null);
           ticketNumber={ticket.ticket_number}
           onClose={() => setShowTraceability(false)}
         />
+      )}
+
+      {/* ── KB Side Drawer ────────────────────────────────────────── */}
+      {showKbSearch && (
+        <>
+          {/* Backdrop — mobile */}
+          <div
+            className="fixed inset-0 bg-black/30 z-[55] lg:hidden"
+            onClick={() => { setShowKbSearch(false); setKbSelectedArticle(null); setKbQuery(''); setKbResults([]); }}
+          />
+          <div className="fixed top-0 right-0 bottom-0 w-full max-w-sm bg-white border-l shadow-2xl z-[60] flex flex-col">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+              <div className="flex items-center gap-2">
+                {kbSelectedArticle && (
+                  <button
+                    onClick={() => setKbSelectedArticle(null)}
+                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 transition mr-1"
+                    title="Volver"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                )}
+                <BookOpen size={16} className="text-blue-600" />
+                <span className="text-sm font-semibold text-gray-800">
+                  {kbSelectedArticle ? 'Artículo' : 'Base de Conocimiento'}
+                </span>
+              </div>
+              <button
+                onClick={() => { setShowKbSearch(false); setKbSelectedArticle(null); setKbQuery(''); setKbResults([]); }}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+
+            {/* Loading state */}
+            {kbLoadingArticle && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {/* ── DETAIL VIEW ─────────────────────────── */}
+            {!kbLoadingArticle && kbSelectedArticle && (
+              <div className="flex-1 overflow-y-auto flex flex-col">
+                <div className="p-4 flex-1 space-y-3">
+                  {/* Category */}
+                  {kbSelectedArticle.category && (
+                    <span className="inline-block text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 rounded-full">
+                      {kbSelectedArticle.category.name}
+                    </span>
+                  )}
+
+                  {/* Title */}
+                  <h2 className="text-base font-bold text-gray-900 leading-snug">
+                    {kbSelectedArticle.title}
+                  </h2>
+
+                  {/* Tags */}
+                  {kbSelectedArticle.tags && kbSelectedArticle.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {kbSelectedArticle.tags.map(tag => (
+                        <span key={tag.id} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Content */}
+                  <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border-t pt-3 mt-1">
+                    {kbSelectedArticle.published_version?.content ?? 'Sin contenido disponible.'}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="p-4 border-t bg-gray-50 flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => insertKbArticle(kbSelectedArticle)}
+                  >
+                    <Send size={13} className="mr-1.5" />
+                    Enviar al chat
+                  </Button>
+                  <a
+                    href={`/knowledge-base/${kbSelectedArticle.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-md bg-white text-gray-600 hover:bg-gray-100 transition"
+                  >
+                    <ExternalLink size={12} />
+                    Abrir
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* ── SEARCH VIEW ─────────────────────────── */}
+            {!kbLoadingArticle && !kbSelectedArticle && (
+              <>
+                {/* Search input */}
+                <div className="px-4 py-3 border-b shrink-0">
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-400 transition">
+                    <Search size={14} className="text-gray-400 shrink-0" />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={kbQuery}
+                      onChange={e => searchKb(e.target.value)}
+                      placeholder="Buscar artículos..."
+                      className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+                    />
+                    {kbSearching && (
+                      <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                    )}
+                    {kbQuery && !kbSearching && (
+                      <button onClick={() => { setKbQuery(''); setKbResults([]); }} className="text-gray-300 hover:text-gray-500">
+                        <XCircle size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Results */}
+                <div className="flex-1 overflow-y-auto">
+                  {kbResults.length === 0 && kbQuery.trim().length >= 2 && !kbSearching && (
+                    <div className="px-4 py-8 text-center text-sm text-gray-400">
+                      No se encontraron artículos para &ldquo;{kbQuery}&rdquo;
+                    </div>
+                  )}
+                  {kbResults.length === 0 && kbQuery.trim().length < 2 && (
+                    <div className="px-4 py-8 text-center text-sm text-gray-400">
+                      Escribe al menos 2 caracteres para buscar
+                    </div>
+                  )}
+                  {kbResults.map(article => (
+                    <button
+                      key={article.id}
+                      onClick={() => openKbArticle(article)}
+                      className="w-full text-left px-4 py-3 border-b hover:bg-blue-50 transition flex items-start gap-3 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-200 transition">
+                        <BookOpen size={13} className="text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 group-hover:text-blue-700 transition leading-snug line-clamp-2">
+                          {article.title}
+                        </p>
+                        {article.category && (
+                          <span className="text-xs text-gray-400 mt-0.5 block">{article.category.name}</span>
+                        )}
+                      </div>
+                      <ExternalLink size={12} className="text-gray-300 group-hover:text-blue-400 shrink-0 mt-1 transition" />
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </>
       )}
 
       {/* ── Image Modal ───────────────────────────────────────────── */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,10 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, Headphones, AlertCircle, CheckCircle2, Upload } from 'lucide-react';
 import { AuthUser } from '@/lib/auth-store';
 
+interface TicketCategory { id: number; name: string }
+
 const schema = z.object({
   requester_area: z.string().min(1, 'El área es requerida'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
   priority: z.enum(['baja', 'media', 'alta']),
+  category_id: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -32,13 +35,19 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
+
+  useEffect(() => {
+    api.get<TicketCategory[]>('/ticket-categories').then(r => setCategories(r.data)).catch(() => {});
+  }, []);
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { requester_area: user.area?.name ?? '', priority: 'media', description: '' },
+    defaultValues: { requester_area: user.area?.name ?? '', priority: 'media', description: '', category_id: '' },
   });
 
   const priority = watch('priority');
+  const categoryId = watch('category_id');
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -51,6 +60,7 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
       form.append('description', data.description);
       form.append('priority', data.priority);
       form.append('created_by_user_id', String(user.id));
+      if (data.category_id) form.append('category_id', data.category_id);
       if (attachment) form.append('attachment', attachment);
 
       const res = await api.post('/portal/tickets', form, {
@@ -120,6 +130,19 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
                   </p>
                 )}
               </div>
+
+              {categories.length > 0 && (
+                <div className="col-span-2 sm:col-span-1 space-y-1.5">
+                  <Label className="text-sm font-medium">Tipo de solicitud</Label>
+                  <Select value={categoryId || 'none'} onValueChange={v => setValue('category_id', v === 'none' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar tipo..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin especificar</SelectItem>
+                      {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="col-span-2 sm:col-span-1 space-y-1.5">
                 <Label className="text-sm font-medium">Prioridad</Label>

@@ -42,7 +42,13 @@ export default function PublicLayout({
   const navLinks = isFuncionario ? portalNavLinks : publicNavLinks
 
   const widgetUser = isFuncionario && user
-    ? { id: user.id, name: user.name, token: useAuthStore.getState().token! }
+    ? {
+        id: user.id,
+        name: user.name,
+        token: useAuthStore.getState().token!,
+        email: user.email,
+        area: typeof user.area === 'string' ? user.area : user.area?.name ?? '',
+      }
     : null
 
   return (

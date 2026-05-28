@@ -7,6 +7,7 @@ import WidgetSearch from './WidgetSearch';
 import WidgetArticle from './WidgetArticle';
 import WidgetChat from './WidgetChat';
 import WidgetRecentTickets from './WidgetRecentTickets';
+import WidgetChatBot from './WidgetChatBot';
 import { MessageCircle, X } from 'lucide-react';
 import { loadSearchContext } from '@/lib/widget-api';
 
@@ -14,6 +15,8 @@ interface WidgetUser {
   id: number;
   name: string;
   token: string;
+  email?: string;
+  area?: string;
 }
 
 interface Props {
@@ -69,6 +72,15 @@ function WidgetInner({ user }: Props) {
 
           {/* Vistas */}
           <div className="flex-1 flex flex-col overflow-hidden">
+            {view === 'chatbot' && isAuthenticated && (
+              <WidgetChatBot
+                userName={user!.name}
+                userEmail={user!.email ?? ''}
+                userArea={user!.area ?? ''}
+                userId={user!.id}
+              />
+            )}
+            {view === 'chatbot' && !isAuthenticated && <WidgetSearch />}
             {view === 'home'    && <WidgetHome userName={user?.name} isAuthenticated={isAuthenticated} />}
             {view === 'search'  && <WidgetSearch />}
             {view === 'article' && <WidgetArticle isAuthenticated={isAuthenticated} />}
@@ -76,16 +88,14 @@ function WidgetInner({ user }: Props) {
             {view === 'chat'    && isAuthenticated && (
               <WidgetChat token={user!.token} userId={user!.id} userName={user!.name} />
             )}
-            {view === 'chat' && !isAuthenticated && (
-              <WidgetSearch />
-            )}
+            {view === 'chat' && !isAuthenticated && <WidgetSearch />}
           </div>
         </div>
       )}
 
       {/* Botón flotante */}
       <button
-        onClick={() => isOpen ? closeWidget() : openWidget()}
+        onClick={() => { if (isOpen) { closeWidget(); } else { setView('chatbot'); openWidget(); } }}
         className="fixed bottom-5 right-5 z-50 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-4 py-3 rounded-full shadow-lg transition-all duration-200"
         aria-label="Soporte"
       >

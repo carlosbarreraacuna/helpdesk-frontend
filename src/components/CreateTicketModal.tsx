@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,12 +15,15 @@ import api from '@/lib/api';
 import { kbApi, KbSuggestion } from '@/lib/kb-api';
 import { useAuthStore } from '@/lib/auth-store';
 
+interface TicketCategory { id: number; name: string }
+
 const createTicketSchema = z.object({
   requester_name: z.string().min(1, 'El nombre es requerido'),
   requester_email: z.string().email('Email inválido'),
   requester_area: z.string().min(1, 'El área es requerida'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
   priority: z.enum(['baja', 'media', 'alta']),
+  category_id: z.string().optional(),
 });
 
 type CreateTicketFormData = z.infer<typeof createTicketSchema>;
@@ -38,7 +41,12 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [kbSuggestions, setKbSuggestions] = useState<KbSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
   const kbDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    api.get<TicketCategory[]>('/ticket-categories').then(r => setCategories(r.data)).catch(() => {});
+  }, []);
 
   // Obtener datos del usuario autenticado
   const user = useAuthStore(s => s.user);
@@ -92,6 +100,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
 
   const priority = watch('priority');
   const description = watch('description');
+  const categoryId = watch('category_id');
 
   useEffect(() => {
     if (kbDebounceRef.current) clearTimeout(kbDebounceRef.current);
@@ -154,7 +163,8 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
       formData.append('requester_area', data.requester_area);
       formData.append('description', data.description);
       formData.append('priority', data.priority);
-      
+      if (data.category_id) formData.append('category_id', data.category_id);
+
       if (attachment) {
         formData.append('attachment', attachment);
       }
@@ -240,6 +250,19 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
               )}
             </div>
           </div>
+
+          {categories.length > 0 && (
+            <div className="space-y-2">
+              <Label>Tipo de solicitud</Label>
+              <Select value={categoryId || 'none'} onValueChange={v => setValue('category_id', v === 'none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar tipo..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin especificar</SelectItem>
+                  {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">

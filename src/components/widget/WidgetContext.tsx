@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { SearchContext, WidgetChatSession, KbArticleSuggestion, saveSearchContext, loadSearchContext } from '@/lib/widget-api';
 
-export type WidgetView = 'home' | 'search' | 'article' | 'chat' | 'recent';
+export type WidgetView = 'home' | 'search' | 'article' | 'chat' | 'recent' | 'chatbot';
 
 interface WidgetContextValue {
   isOpen: boolean;
