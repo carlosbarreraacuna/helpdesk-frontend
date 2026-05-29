@@ -17,6 +17,7 @@ import {
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
   BookOpen, Search, ExternalLink, RotateCcw,
   Mail, MessageCircle, Globe, Users, UserPlus, Trash2, SlidersHorizontal, History,
+  Sparkles, FileText, Loader2,
 } from 'lucide-react';
 
 interface Ticket {
@@ -157,6 +158,12 @@ const [imageModal, setImageModal] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showTraceability, setShowTraceability] = useState(false);
   const [replyChannel, setReplyChannel] = useState<'portal' | 'email' | 'whatsapp'>('portal');
+
+  // IA features
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSentiment, setAiSentiment] = useState<{ overall: string; score: number; alert: boolean } | null>(null);
 
   // KB search in reply box
   const [showKbSearch, setShowKbSearch] = useState(false);
@@ -355,6 +362,39 @@ const [imageModal, setImageModal] = useState<string | null>(null);
     } finally {
       setActionLoading('');
     }
+  };
+
+  const handleAiSuggestReply = async () => {
+    setAiSuggestLoading(true);
+    try {
+      const res = await api.post(`/ai/tickets/${ticketId}/suggest-reply`);
+      setNewComment(res.data.reply);
+    } catch { /* silent */ } finally {
+      setAiSuggestLoading(false);
+    }
+  };
+
+  const handleAiSummarize = async () => {
+    setAiSummaryLoading(true);
+    setAiSummary(null);
+    try {
+      const res = await api.post(`/ai/tickets/${ticketId}/summarize`);
+      setAiSummary(res.data.summary);
+    } catch { /* silent */ } finally {
+      setAiSummaryLoading(false);
+    }
+  };
+
+  const handleAiSentiment = async () => {
+    const timeline = buildTimeline();
+    const messages = timeline
+      .filter(e => e.type === 'comment' || e.type === 'open')
+      .map(e => ({ from: e.author, text: e.content }));
+    if (messages.length === 0) return;
+    try {
+      const res = await api.post('/ai/sentiment', { messages });
+      setAiSentiment(res.data);
+    } catch { /* silent */ }
   };
 
   const handleAssign = async () => {
@@ -646,6 +686,35 @@ const [imageModal, setImageModal] = useState<string | null>(null);
             <span className={`inline-block w-2 h-2 rounded-full mr-1 ${prioConf.dot}`} />
             {prioConf.label}
           </span>
+          {/* Sentimiento IA badge */}
+          {canAct && aiSentiment && (
+            <span
+              title={`Sentimiento: ${aiSentiment.overall}`}
+              className={`hidden sm:inline px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                aiSentiment.overall === 'frustrado' || aiSentiment.overall === 'negativo'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : aiSentiment.overall === 'positivo'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : 'bg-gray-50 text-gray-600 border-gray-200'
+              }`}
+            >
+              {aiSentiment.overall === 'frustrado' ? '😤' : aiSentiment.overall === 'negativo' ? '😟' : aiSentiment.overall === 'positivo' ? '😊' : '😐'} {aiSentiment.overall}
+            </span>
+          )}
+
+          {/* Resumen IA button */}
+          {canAct && (
+            <button
+              onClick={handleAiSummarize}
+              disabled={aiSummaryLoading}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition disabled:opacity-50"
+              title="Resumir ticket con IA"
+            >
+              {aiSummaryLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+              Resumir
+            </button>
+          )}
+
           {/* Trazabilidad button */}
           <button
             onClick={() => setShowTraceability(true)}
@@ -687,6 +756,23 @@ const [imageModal, setImageModal] = useState<string | null>(null);
       {successMsg && (
         <div className="mx-6 mt-3 flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg text-sm shrink-0">
           <CheckCircle2 size={16} /> {successMsg}
+        </div>
+      )}
+      {aiSummary && (
+        <div className="mx-6 mt-3 flex items-start gap-2 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm shrink-0">
+          <Sparkles size={16} className="text-blue-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-xs text-blue-600 mb-1">Resumen IA</p>
+            <p className="leading-relaxed">{aiSummary}</p>
+          </div>
+          <button onClick={() => setAiSummary(null)} className="text-blue-400 hover:text-blue-600 shrink-0">✕</button>
+        </div>
+      )}
+      {canAct && aiSentiment?.alert && (
+        <div className="mx-6 mt-3 flex items-center gap-2 bg-orange-50 border border-orange-200 text-orange-700 px-4 py-2 rounded-lg text-sm shrink-0">
+          <AlertCircle size={16} className="shrink-0" />
+          <span>El usuario muestra signos de frustración. Se recomienda atención prioritaria.</span>
+          <button onClick={() => setAiSentiment(s => s ? { ...s, alert: false } : null)} className="ml-auto text-orange-400 hover:text-orange-600">✕</button>
         </div>
       )}
 
@@ -963,6 +1049,17 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                   }`}
                 >
                   <BookOpen size={16} />
+                </button>
+              )}
+              {/* Botón Sugerir respuesta IA */}
+              {canAct && (
+                <button
+                  onClick={handleAiSuggestReply}
+                  disabled={aiSuggestLoading}
+                  title="Sugerir respuesta con IA"
+                  className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition disabled:opacity-50"
+                >
+                  {aiSuggestLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                 </button>
               )}
               <Button

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Headphones, AlertCircle, CheckCircle2, Upload } from 'lucide-react';
+import { X, Headphones, AlertCircle, CheckCircle2, Upload, Sparkles } from 'lucide-react';
 import { AuthUser } from '@/lib/auth-store';
 
 interface TicketCategory { id: number; name: string }
@@ -36,6 +36,9 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
   const [success, setSuccess] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
+  const [aiSuggestion, setAiSuggestion] = useState<{ priority: string; category_id: number | null; reason: string } | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.get<TicketCategory[]>('/ticket-categories').then(r => setCategories(r.data)).catch(() => {});
@@ -48,6 +51,29 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
 
   const priority = watch('priority');
   const categoryId = watch('category_id');
+  const description = watch('description');
+
+  useEffect(() => {
+    if (description.length < 20) { setAiSuggestion(null); return; }
+    if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+    aiDebounceRef.current = setTimeout(async () => {
+      setAiLoading(true);
+      try {
+        const res = await api.post('/ai/classify-ticket', { description });
+        setAiSuggestion(res.data);
+      } catch { /* silent */ } finally {
+        setAiLoading(false);
+      }
+    }, 1200);
+    return () => { if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current); };
+  }, [description]);
+
+  const applyAiSuggestion = () => {
+    if (!aiSuggestion) return;
+    setValue('priority', aiSuggestion.priority as 'baja' | 'media' | 'alta');
+    if (aiSuggestion.category_id) setValue('category_id', String(aiSuggestion.category_id));
+    setAiSuggestion(null);
+  };
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -192,6 +218,42 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
                 />
               </label>
             </div>
+
+            {/* Sugerencia IA */}
+            {aiLoading && (
+              <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 rounded-xl px-3 py-2">
+                <Sparkles className="w-3.5 h-3.5 animate-pulse shrink-0" />
+                <span>Analizando descripción con IA...</span>
+              </div>
+            )}
+            {aiSuggestion && !aiLoading && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="text-xs font-semibold text-blue-700">Sugerencia IA</span>
+                </div>
+                <p className="text-xs text-blue-800">{aiSuggestion.reason}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-blue-600">
+                    Prioridad sugerida: <strong className="capitalize">{aiSuggestion.priority}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={applyAiSuggestion}
+                    className="ml-auto text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Aplicar sugerencia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAiSuggestion(null)}
+                    className="text-xs text-blue-400 hover:text-blue-600"
+                  >
+                    Ignorar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">

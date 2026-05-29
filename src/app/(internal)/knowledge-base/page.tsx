@@ -28,7 +28,9 @@ import {
   Settings,
   CheckCircle,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
+import api from '@/lib/api';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   draft: { label: 'Borrador', color: 'bg-yellow-100 text-yellow-700' },
@@ -52,6 +54,9 @@ export default function KnowledgeBasePage() {
     q: '', category_id: '', subcategory_id: '', tag_ids: '', status: '', page: 1, per_page: 15,
   });
   const [publishingId, setPublishingId] = useState<number | null>(null);
+  const [semanticMode, setSemanticMode] = useState(false);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticResults, setSemanticResults] = useState<KbArticle[] | null>(null);
 
   const roleName = user?.role?.name ?? '';
   const canCreate = ['agente', 'supervisor', 'admin'].includes(roleName);
@@ -94,8 +99,26 @@ export default function KnowledgeBasePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  const setFilter = (key: string, value: string | number) =>
+  const setFilter = (key: string, value: string | number) => {
     setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
+    if (key === 'q' && semanticMode) setSemanticResults(null);
+  };
+
+  const handleSemanticSearch = async () => {
+    if (!filters.q.trim()) return;
+    setSemanticLoading(true);
+    setSemanticResults(null);
+    try {
+      const res = await api.post('/ai/kb-search', { query: filters.q });
+      const rankedIds: number[] = res.data.articles.map((a: { id: number }) => a.id);
+      if (rankedIds.length === 0) { setSemanticResults([]); return; }
+      const { data } = await kbApi.getArticles({ per_page: 50, status: 'published' });
+      const byId = Object.fromEntries(data.data.map((a: KbArticle) => [a.id, a]));
+      setSemanticResults(rankedIds.map(id => byId[id]).filter(Boolean));
+    } catch { setSemanticResults([]); } finally {
+      setSemanticLoading(false);
+    }
+  };
 
   const handleTogglePublish = async (e: React.MouseEvent, article: KbArticle) => {
     e.stopPropagation();
@@ -188,14 +211,38 @@ export default function KnowledgeBasePage() {
       {/* Filters */}
       <Card className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Buscar artículos..."
-              value={filters.q}
-              onChange={e => setFilter('q', e.target.value)}
-              className="pl-8 h-9 text-sm"
-            />
+          <div className="relative flex gap-2 md:col-span-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder={semanticMode ? 'Búsqueda semántica con IA...' : 'Buscar artículos...'}
+                value={filters.q}
+                onChange={e => setFilter('q', e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && semanticMode) handleSemanticSearch(); }}
+                className="pl-8 h-9 text-sm"
+              />
+            </div>
+            <button
+              onClick={() => { setSemanticMode(v => !v); setSemanticResults(null); }}
+              title={semanticMode ? 'Cambiar a búsqueda normal' : 'Activar búsqueda semántica con IA'}
+              className={`px-2.5 h-9 rounded-lg border text-xs font-medium transition flex items-center gap-1 shrink-0 ${
+                semanticMode
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {semanticMode ? 'IA' : 'IA'}
+            </button>
+            {semanticMode && filters.q && (
+              <button
+                onClick={handleSemanticSearch}
+                disabled={semanticLoading}
+                className="px-3 h-9 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition disabled:opacity-50 shrink-0"
+              >
+                {semanticLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Buscar'}
+              </button>
+            )}
           </div>
           <Select value={filters.category_id || 'all'} onValueChange={v => setFilter('category_id', v === 'all' ? '' : v)}>
             <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Todas las categorías" /></SelectTrigger>
@@ -217,12 +264,24 @@ export default function KnowledgeBasePage() {
         </div>
       </Card>
 
+      {/* Semantic search banner */}
+      {semanticMode && semanticResults !== null && (
+        <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          {semanticResults.length > 0
+            ? `IA encontró ${semanticResults.length} artículo(s) relevante(s) para "${filters.q}"`
+            : `IA no encontró artículos relevantes para "${filters.q}"`}
+          <button onClick={() => setSemanticResults(null)} className="ml-auto text-blue-400 hover:text-blue-600">✕</button>
+        </div>
+      )}
+
       {/* Articles Grid */}
-      {tableLoading ? (
+      {(tableLoading || semanticLoading) ? (
         <div className="text-center py-10">
           <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          {semanticLoading && <p className="text-xs text-gray-500 mt-2">Analizando con IA...</p>}
         </div>
-      ) : articles.length === 0 ? (
+      ) : (semanticMode && semanticResults !== null ? semanticResults : articles).length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-gray-400">
             <BookOpen className="h-12 w-12 mb-3 opacity-30" />
@@ -236,7 +295,7 @@ export default function KnowledgeBasePage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {articles.map(article => (
+          {(semanticMode && semanticResults !== null ? semanticResults : articles).map(article => (
             <Card
               key={article.id}
               className="cursor-pointer hover:shadow-md transition-shadow border border-gray-100"

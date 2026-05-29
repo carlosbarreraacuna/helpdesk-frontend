@@ -14,7 +14,8 @@ type Step =
   | 'select_category'
   | 'describe'
   | 'creating'
-  | 'done';
+  | 'done'
+  | 'ai_thinking';
 
 interface BotMessage {
   id: string;
@@ -94,39 +95,50 @@ export default function WidgetChatBot({ userName, userEmail, userArea, userId }:
     const query = input.trim();
     setInput('');
     userSay(query);
-    setStep('searching');
+    setStep('ai_thinking');
 
     try {
-      const res = await api.get('/kb/articles', {
-        params: { search: query, status: 'published', per_page: 1 },
+      const res = await api.post('/ai/widget-chat', {
+        message: query,
+        history: transcript,
+        user_context: { name: userName, area: userArea },
       });
-      const articles: BotMessage['article'][] = res.data.data ?? [];
 
-      if (articles.length === 0) {
-        botSay('No encontré artículos relacionados con tu consulta. ¿Deseas hablar con un agente de soporte?', {
-          buttons: [{ label: '👤 Hablar con un agente', action: 'escalate', primary: true }],
+      const { reply, suggest_ticket, article_id } = res.data;
+
+      if (article_id) {
+        // Try to load full article to show card
+        try {
+          const articleRes = await api.get(`/kb/articles/${article_id}`);
+          const fullArticle = articleRes.data;
+          setKbArticle(fullArticle);
+          botSay(reply, {
+            article: fullArticle,
+            buttons: [
+              { label: '✅ Sí, resolvió mi duda', action: 'helpful_yes', primary: true },
+              { label: '❌ No, necesito más ayuda', action: 'helpful_no', primary: false },
+            ],
+          });
+          setStep('article_shown');
+        } catch {
+          botSay(reply, {
+            buttons: suggest_ticket
+              ? [{ label: '👤 Crear ticket de soporte', action: 'escalate', primary: true }]
+              : undefined,
+          });
+          setStep(suggest_ticket ? 'escalate_offer' : 'idle');
+        }
+      } else if (suggest_ticket) {
+        botSay(reply, {
+          buttons: [{ label: '👤 Crear ticket de soporte', action: 'escalate', primary: true }],
         });
         setStep('escalate_offer');
-        return;
+      } else {
+        botSay(reply);
+        setStep('idle');
       }
-
-      let fullArticle: BotMessage['article'] = articles[0];
-      try {
-        const d = await api.get(`/kb/articles/${articles[0]!.id}`);
-        fullArticle = d.data;
-      } catch { /* use partial article */ }
-      setKbArticle(fullArticle);
-
-      botSay('Encontré un artículo que podría ayudarte:', {
-        article: fullArticle,
-        buttons: [
-          { label: '✅ Sí, resolvió mi duda', action: 'helpful_yes', primary: true },
-          { label: '❌ No, no resolvió mi duda', action: 'helpful_no', primary: false },
-        ],
-      });
-      setStep('article_shown');
     } catch {
-      botSay('No pude buscar artículos en este momento. ¿Deseas hablar con un agente?', {
+      botSay('Ocurrió un error al procesar tu consulta. ¿Deseas hablar con un agente?', {
         buttons: [{ label: '👤 Hablar con un agente', action: 'escalate', primary: true }],
       });
       setStep('escalate_offer');
@@ -209,7 +221,7 @@ export default function WidgetChatBot({ userName, userEmail, userArea, userId }:
     }
   };
 
-  const inputActive = step === 'idle' || step === 'describe';
+  const inputActive = step === 'idle' || step === 'describe' || step === 'escalate_offer' || step === 'article_shown';
   const inputPlaceholder = step === 'describe'
     ? 'Describe tu problema o solicitud...'
     : 'Escribe tu mensaje...';
@@ -315,10 +327,10 @@ export default function WidgetChatBot({ userName, userEmail, userArea, userId }:
         ))}
 
         {/* Typing indicator */}
-        {(step === 'searching' || step === 'creating') && (
+        {(step === 'searching' || step === 'creating' || step === 'ai_thinking') && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex items-center gap-2">
-              {step === 'searching' ? (
+              {step === 'ai_thinking' ? (
                 <>
                   <div className="flex gap-1">
                     {[0, 1, 2].map(i => (
@@ -329,12 +341,25 @@ export default function WidgetChatBot({ userName, userEmail, userArea, userId }:
                       />
                     ))}
                   </div>
-                  <span className="text-xs text-gray-400">Buscando en la base de conocimiento...</span>
+                  <span className="text-xs text-gray-400">Analizando tu consulta con IA...</span>
                 </>
-              ) : (
+              ) : step === 'creating' ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
                   <span className="text-xs text-gray-400">Creando tu ticket...</span>
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+                        style={{ animationDelay: `${i * 0.15}s` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-400">Buscando...</span>
                 </>
               )}
             </div>
