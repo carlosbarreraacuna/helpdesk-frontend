@@ -100,8 +100,8 @@ const NavMenu = memo(function NavMenu({ items }: { items: MenuItem[] }) {
   return <nav className="mt-8">{items.map((item) => renderItem(item))}</nav>;
 });
 
-// Variables a nivel de módulo — sobreviven re-mounts del componente
-let _menuLoaded = false;
+// Cache keyed by user id so different users get their own menu
+let _menuLoadedForUser: number | null = null;
 let _cachedMenuItems: MenuItem[] = [];
 
 // ─── AppShell: Client Component que recibe children del Server ───────────────
@@ -133,22 +133,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Fetch menú — una sola vez en toda la vida del módulo
+  // Fetch menú — una vez por usuario (cache keyed by user id)
   useEffect(() => {
-    if (_menuLoaded) {
+    if (!user?.id) return;
+    if (_menuLoadedForUser === user.id && _cachedMenuItems.length > 0) {
       setMenuItems(_cachedMenuItems);
       return;
     }
+    // Different user — reset cache
+    _menuLoadedForUser = null;
+    _cachedMenuItems = [];
     const storedToken = localStorage.getItem('auth-token');
     if (!storedToken) return;
-    _menuLoaded = true;
+    _menuLoadedForUser = user.id;
     api.get('/menu/user')
       .then(({ data }) => {
         _cachedMenuItems = data;
         setMenuItems(data);
       })
-      .catch(() => { _menuLoaded = false; });
-  }, []);
+      .catch(() => { _menuLoadedForUser = null; });
+  }, [user?.id]);
 
   const toggle = () => setSidebarOpen((o) => !o);
 

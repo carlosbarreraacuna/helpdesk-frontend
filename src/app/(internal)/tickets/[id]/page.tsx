@@ -17,7 +17,7 @@ import {
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
   BookOpen, Search, ExternalLink, RotateCcw,
   Mail, MessageCircle, Globe, Users, UserPlus, Trash2, SlidersHorizontal, History,
-  Sparkles, FileText, Loader2,
+  Sparkles, FileText, Loader2, ShieldCheck,
 } from 'lucide-react';
 
 interface Ticket {
@@ -32,11 +32,16 @@ interface Ticket {
   priority: string;
   status: { id: number; name: string; color: string };
   assigned_agent?: { id: number; name: string; email: string };
+  assigned_to?: number | null;
   work_group_id?: number | null;
   work_group?: { id: number; name: string } | null;
   category?: { id: number; name: string } | null;
   created_at: string;
   updated_at: string;
+  validation_requested_at?: string | null;
+  validation_deadline?: string | null;
+  validation_approved_at?: string | null;
+  validation_rejected_count?: number;
 }
 
 interface AgentUser {
@@ -136,6 +141,7 @@ export default function TicketDetailPage() {
   const [actionLoading, setActionLoading] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // agentUsers: only agente + supervisor roles (for assignment dropdown)
   const [agentUsers, setAgentUsers] = useState<AgentUser[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -221,10 +227,11 @@ const [imageModal, setImageModal] = useState<string | null>(null);
   useEffect(() => {
     loadAll();
     if (canAct) {
-      api.get('/users').then(r => {
-        const all: AgentUser[] = r.data.data || [];
-        setAgentUsers(all);
-      }).catch(() => {});
+      // Load only agente + supervisor for assignment dropdown (no special permission needed)
+      api.get('/users/assignable')
+        .then(r => setAgentUsers(r.data.data || []))
+        .catch(() => {});
+      // Portal users are loaded on-demand in searchParticipants
       api.get('/ticket-statuses').then(r => setStatuses(r.data)).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -458,6 +465,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
   };
 
   const handleClose = async () => {
+    if (!confirm('¿Cerrar este ticket definitivamente?')) return;
     setActionLoading('close');
     try {
       await api.post(`/tickets/${ticketId}/close`);
@@ -470,17 +478,30 @@ const [imageModal, setImageModal] = useState<string | null>(null);
     }
   };
 
+  const handleRequestValidation = async () => {
+    if (!confirm('¿Enviar solicitud de validación al usuario que creó el ticket?')) return;
+    setActionLoading('request-validation');
+    try {
+      await api.post(`/tickets/${ticketId}/request-validation`);
+      await loadAll();
+      flash('Solicitud de validación enviada al usuario');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error al solicitar validación');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
   const searchParticipants = (q: string) => {
     setParticipantSearch(q);
     if (q.trim().length < 2) { setParticipantResults([]); return; }
-    const lq = q.toLowerCase();
-    setParticipantResults(
-      agentUsers.filter(u =>
-        u.role?.name === 'usuario' &&
-        (u.name.toLowerCase().includes(lq) || u.email.toLowerCase().includes(lq)) &&
-        !participants.some(p => p.id === u.id)
-      ).slice(0, 6)
-    );
+    api.get('/users/portal-users', { params: { search: q } })
+      .then(r => {
+        const results: AgentUser[] = r.data.data || [];
+        setParticipantResults(results.filter(u => !participants.some(p => p.id === u.id)).slice(0, 6));
+      })
+      .catch(() => {});
   };
 
   const handleAddParticipant = async (u: AgentUser) => {
@@ -1135,7 +1156,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                       <SelectValue placeholder="Selecciona agente..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {agentUsers.filter(u => u.role?.name !== 'usuario').map(u => (
+                      {agentUsers.map(u => (
                         <SelectItem key={u.id} value={u.id.toString()}>
                           <div className="flex items-center gap-2">
                             <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
@@ -1278,15 +1299,93 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                   <AlertCircle size={14} className="text-orange-500" />
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones</span>
                 </div>
+
+                {/* Validation status banner */}
+                {ticket?.validation_requested_at && !ticket?.validation_approved_at && (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                    <div className="flex items-center gap-1.5 font-semibold mb-0.5">
+                      <ShieldCheck size={13} />
+                      Esperando validación del usuario
+                    </div>
+                    <p className="text-amber-700">
+                      El usuario debe confirmar que la solución fue satisfactoria antes de poder cerrar el ticket.
+                    </p>
+                    {ticket.validation_deadline && (
+                      <p className="mt-1 text-amber-600">
+                        Plazo: {new Date(ticket.validation_deadline).toLocaleString('es-CO')}
+                      </p>
+                    )}
+                    {(ticket.validation_rejected_count ?? 0) > 0 && (
+                      <p className="mt-1 font-medium text-red-700">
+                        Rechazos: {ticket.validation_rejected_count}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {ticket?.validation_approved_at && (
+                  <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-800">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <CheckCircle2 size={13} />
+                      Usuario confirmó la solución — puedes cerrar el ticket
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <Button size="sm" variant="outline" className="border-orange-200 text-orange-700 hover:bg-orange-50 text-xs" onClick={handleEscalate} disabled={actionLoading === 'escalate'}>
                     <TrendingUp size={13} className="mr-1.5" />
                     {actionLoading === 'escalate' ? '...' : 'Escalar'}
                   </Button>
-                  <Button size="sm" variant="destructive" className="text-xs" onClick={handleClose} disabled={actionLoading === 'close'}>
+
+                  {/* Show "Solicitar validación" when no pending validation and not already approved */}
+                  {!ticket?.validation_requested_at && !ticket?.validation_approved_at && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-200 text-amber-700 hover:bg-amber-50 text-xs"
+                      onClick={handleRequestValidation}
+                      disabled={actionLoading === 'request-validation'}
+                    >
+                      <ShieldCheck size={13} className="mr-1.5" />
+                      {actionLoading === 'request-validation' ? '...' : 'Pedir validación'}
+                    </Button>
+                  )}
+
+                  {/* Re-send validation if rejected */}
+                  {ticket?.validation_requested_at === null && (ticket?.validation_rejected_count ?? 0) > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-200 text-amber-700 hover:bg-amber-50 text-xs"
+                      onClick={handleRequestValidation}
+                      disabled={actionLoading === 'request-validation'}
+                    >
+                      <ShieldCheck size={13} className="mr-1.5" />
+                      {actionLoading === 'request-validation' ? '...' : 'Reenviar validación'}
+                    </Button>
+                  )}
+
+                  {/* Close only enabled when approved or no validation ever requested */}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="text-xs"
+                    onClick={handleClose}
+                    disabled={
+                      actionLoading === 'close' ||
+                      (!!ticket?.validation_requested_at && !ticket?.validation_approved_at)
+                    }
+                    title={
+                      ticket?.validation_requested_at && !ticket?.validation_approved_at
+                        ? 'Esperando validación del usuario'
+                        : undefined
+                    }
+                  >
                     <XCircle size={13} className="mr-1.5" />
                     {actionLoading === 'close' ? '...' : 'Cerrar'}
                   </Button>
+
                   {currentUser?.role?.name === 'agente' && ticket?.work_group_id && (
                     <Button
                       size="sm"

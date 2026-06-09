@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft, Send, Clock, AlertCircle, CheckCircle2, MessageSquare,
-  Paperclip, UserCheck, TrendingUp, Tag, XCircle, Loader2,
+  Paperclip, UserCheck, TrendingUp, Tag, XCircle, Loader2, ShieldCheck,
 } from 'lucide-react';
 
 interface Ticket {
@@ -27,6 +27,10 @@ interface Ticket {
   assigned_agent?: { id: number; name: string; email: string } | null;
   created_at: string;
   updated_at: string;
+  validation_requested_at?: string | null;
+  validation_deadline?: string | null;
+  validation_approved_at?: string | null;
+  validation_rejected_count?: number;
 }
 
 interface CommentAttachment {
@@ -110,6 +114,11 @@ export default function PortalTicketDetailPage() {
   const [imageModal, setImageModal] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Validation state
+  const [validationComment, setValidationComment] = useState('');
+  const [validatingAction, setValidatingAction] = useState<'approved' | 'rejected' | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role?.name !== 'usuario') {
@@ -221,6 +230,33 @@ export default function PortalTicketDetailPage() {
       if (b.isBotContext) return 1;
       return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
     });
+  };
+
+  const handleValidate = async (action: 'approved' | 'rejected') => {
+    if (action === 'rejected' && !validationComment.trim()) {
+      setError('Debes indicar qué problema persiste antes de rechazar.');
+      return;
+    }
+    setValidationLoading(true);
+    try {
+      await api.post(`/tickets/${ticket!.id}/validate-portal`, {
+        action,
+        comment: validationComment.trim() || null,
+      });
+      setValidationComment('');
+      setValidatingAction(null);
+      setSuccess(
+        action === 'approved'
+          ? '¡Gracias! Confirmaste que la solución fue satisfactoria. El agente podrá cerrar el ticket.'
+          : 'Hemos recibido tu reporte. El equipo revisará el problema y te contactará.'
+      );
+      await loadTicket();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error al enviar la validación');
+    } finally {
+      setValidationLoading(false);
+    }
   };
 
   const handleSend = async () => {
@@ -340,6 +376,80 @@ export default function PortalTicketDetailPage() {
       {success && (
         <div className="mx-4 mt-3 bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-xl text-sm flex items-center gap-2 shrink-0">
           <CheckCircle2 className="w-4 h-4" /> {success}
+        </div>
+      )}
+
+      {/* Validation banner */}
+      {ticket.status.name === 'pendiente_validacion' && !ticket.validation_approved_at && (
+        <div className="mx-4 mt-3 shrink-0">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
+              <span className="font-semibold text-amber-900 text-sm">
+                ¿La solución fue satisfactoria?
+              </span>
+            </div>
+            <p className="text-xs text-amber-800 mb-3">
+              El equipo de soporte resolvió tu solicitud. Por favor confirma si todo está correcto o indícanos qué problema persiste.
+            </p>
+
+            {ticket.validation_deadline && (
+              <p className="text-xs text-amber-700 mb-3">
+                Plazo para responder: <strong>{new Date(ticket.validation_deadline).toLocaleString('es-CO')}</strong>
+              </p>
+            )}
+
+            {validatingAction === null && (
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setValidatingAction('approved')}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Todo está correcto
+                </button>
+                <button
+                  onClick={() => setValidatingAction('rejected')}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition"
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Aún hay problemas
+                </button>
+              </div>
+            )}
+
+            {validatingAction !== null && (
+              <div className="mt-2 space-y-2">
+                <textarea
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                  rows={3}
+                  placeholder={
+                    validatingAction === 'rejected'
+                      ? 'Describe qué problema persiste... (obligatorio)'
+                      : 'Comentario adicional (opcional)'
+                  }
+                  value={validationComment}
+                  onChange={e => setValidationComment(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleValidate(validatingAction)}
+                    disabled={validationLoading || (validatingAction === 'rejected' && !validationComment.trim())}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 ${
+                      validatingAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                    }`}
+                  >
+                    {validationLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    {validatingAction === 'approved' ? 'Confirmar — todo correcto' : 'Confirmar — hay problemas'}
+                  </button>
+                  <button
+                    onClick={() => { setValidatingAction(null); setValidationComment(''); }}
+                    className="px-3 py-2 border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

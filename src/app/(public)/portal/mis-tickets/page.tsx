@@ -23,6 +23,24 @@ interface TicketItem {
   assigned_agent?: { id: number; name: string } | null;
 }
 
+interface TicketStatus {
+  id: number;
+  name: string;
+  color: string;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  nuevo: 'Nuevo',
+  asignado: 'Asignado',
+  en_progreso: 'En proceso',
+  pendiente_usuario: 'Pendiente usuario',
+  escalado: 'Escalado',
+  resuelto: 'Resuelto',
+  pendiente_validacion: 'Pendiente validación',
+  cerrado: 'Cerrado',
+  reabierto: 'Reabierto',
+};
+
 const PRIORITY_LABEL: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 const PRIORITY_COLOR: Record<string, string> = {
   alta: 'text-red-700 bg-red-50 border-red-200',
@@ -41,11 +59,14 @@ export default function MisTicketsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [stats, setStats] = useState({ total: 0, abiertos: 0, resueltos: 0 });
+  const [statuses, setStatuses] = useState<TicketStatus[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role?.name !== 'usuario') {
       router.replace('/login');
+      return;
     }
+    api.get('/ticket-statuses').then(r => setStatuses(r.data)).catch(() => {});
   }, [isAuthenticated, user, router]);
 
   const fetchTickets = async () => {
@@ -134,11 +155,11 @@ export default function MisTicketsPage() {
               className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
             >
               <option value="">Todos los estados</option>
-              <option value="1">Nuevo</option>
-              <option value="2">Asignado</option>
-              <option value="3">En proceso</option>
-              <option value="4">Resuelto</option>
-              <option value="5">Cerrado</option>
+              {statuses.map(s => (
+                <option key={s.id} value={s.id.toString()}>
+                  {STATUS_LABEL[s.name] ?? s.name}
+                </option>
+              ))}
             </select>
             <button
               onClick={fetchTickets}
