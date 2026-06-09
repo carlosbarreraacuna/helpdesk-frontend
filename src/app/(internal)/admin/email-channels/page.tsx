@@ -200,7 +200,7 @@ export default function EmailChannelsPage() {
                     </div>
                     <p className="text-sm text-gray-500">{channel.email}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {channel.imap_host}:{channel.imap_port} · {channel.imap_encryption.toUpperCase()}
+                      {channel.imap_host ? `${channel.imap_host}:${channel.imap_port} · ${channel.imap_encryption?.toUpperCase()}` : 'IMAP no configurado'}
                       {channel.last_polled_at && (
                         <> · Último sondeo: {new Date(channel.last_polled_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}</>
                       )}
