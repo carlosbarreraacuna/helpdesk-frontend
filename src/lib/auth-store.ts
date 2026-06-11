@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   token: null,
   user: null,
   isAuthenticated: false,
-  loading: false,
+  loading: true,
 
   setAuth: (token: string, user: AuthUser) => {
     // Access token lives in sessionStorage (cleared on tab/browser close)
