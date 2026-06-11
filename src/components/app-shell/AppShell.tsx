@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import * as Icons from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
@@ -108,7 +108,6 @@ let _cachedMenuItems: MenuItem[] = [];
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
-  const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -116,14 +115,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Auth check — si no hay token, limpiar estado zustand stale antes de redirigir
-  useEffect(() => {
-    const storedToken = localStorage.getItem('auth-token');
-    if (!storedToken) {
-      useAuthStore.getState().clearAuth();
-      router.push('/login');
-    }
-  }, [router]);
 
   // Sidebar responsive
   useEffect(() => {
@@ -143,8 +134,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // Different user — reset cache
     _menuLoadedForUser = null;
     _cachedMenuItems = [];
-    const storedToken = localStorage.getItem('auth-token');
-    if (!storedToken) return;
     _menuLoadedForUser = user.id;
     api.get('/menu/user')
       .then(({ data }) => {
