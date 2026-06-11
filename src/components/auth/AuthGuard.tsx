@@ -9,7 +9,13 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    checkAuth();
+    if (isAuthenticated) {
+      // Token already in memory (e.g. just logged in) — skip re-verify, just clear loading.
+      useAuthStore.setState({ loading: false });
+    } else {
+      // Page reload or fresh visit — restore session from sessionStorage or refresh cookie.
+      checkAuth();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
