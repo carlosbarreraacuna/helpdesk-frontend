@@ -150,6 +150,11 @@ export default function PortalTicketDetailPage() {
 
   useEffect(() => { loadTicket(); }, [ticketId]);
 
+  // Mark ticket as read when opened
+  useEffect(() => {
+    if (ticketId) localStorage.setItem(`ticket_read_${ticketId}`, new Date().toISOString());
+  }, [ticketId]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments, widgetMessages]);

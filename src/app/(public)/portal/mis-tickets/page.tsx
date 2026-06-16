@@ -8,8 +8,16 @@ import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   Plus, Search, Ticket, Clock, CheckCircle2, AlertCircle,
-  ChevronRight, Filter, Loader2, RefreshCw, Package, XCircle,
+  ChevronRight, Filter, Loader2, RefreshCw, Package, XCircle, MessageSquare,
 } from 'lucide-react';
+
+const hasUnread = (ticket: TicketItem): boolean => {
+  if (!ticket.latest_agent_comment_at) return false;
+  if (typeof window === 'undefined') return false;
+  const lastRead = localStorage.getItem(`ticket_read_${ticket.id}`);
+  if (!lastRead) return true;
+  return new Date(ticket.latest_agent_comment_at) > new Date(lastRead);
+};
 import PortalCreateTicketModal from '@/components/portal/PortalCreateTicketModal';
 
 interface TicketItem {
@@ -21,6 +29,7 @@ interface TicketItem {
   created_at: string;
   updated_at: string;
   assigned_agent?: { id: number; name: string } | null;
+  latest_agent_comment_at?: string | null;
 }
 
 interface TicketStatus {
@@ -191,7 +200,7 @@ export default function MisTicketsPage() {
               <Link
                 key={ticket.id}
                 href={`/portal/mis-tickets/${ticket.id}`}
-                className="block bg-white border border-gray-200 rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all group"
+                className={`block bg-white border rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all group ${hasUnread(ticket) ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -199,6 +208,12 @@ export default function MisTicketsPage() {
                       <span className="font-mono text-xs font-semibold text-primary bg-primary/5 px-2 py-0.5 rounded">
                         {ticket.ticket_number}
                       </span>
+                      {hasUnread(ticket) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
+                          <MessageSquare size={10} />
+                          Nuevo mensaje
+                        </span>
+                      )}
                       <span
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border"
                         style={{ backgroundColor: ticket.status.color + '22', color: ticket.status.color, borderColor: ticket.status.color + '55' }}
