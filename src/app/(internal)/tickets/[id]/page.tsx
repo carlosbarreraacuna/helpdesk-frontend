@@ -353,14 +353,10 @@ const [imageModal, setImageModal] = useState<string | null>(null);
       if (text.trim()) form.append('comment', text);
       files.forEach(f => form.append('files[]', f));
 
-      if (replyChannel === 'portal') {
-        await api.post(`/tickets/${ticketId}/comments`, form);
-      } else {
-        form.append('channel', replyChannel);
-        form.append('message', text);
-        await api.post(`/tickets/${ticketId}/reply-channel`, form);
-      }
-      flash(`Respuesta enviada por ${replyChannel === 'email' ? 'Email' : replyChannel === 'whatsapp' ? 'WhatsApp' : 'Portal'}`);
+      form.append('channel', replyChannel);
+      form.append('message', text);
+      await api.post(`/tickets/${ticketId}/reply-channel`, form);
+      flash('Respuesta enviada por Email');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || 'Error al enviar');
