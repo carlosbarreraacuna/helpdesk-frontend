@@ -16,7 +16,7 @@ import {
   ArrowLeft, Send, Clock, Tag, AlertCircle, CheckCircle2,
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
   BookOpen, Search, ExternalLink, RotateCcw,
-  Mail, MessageCircle, Globe, Users, UserPlus, Trash2, SlidersHorizontal, History,
+  Mail, Users, UserPlus, Trash2, SlidersHorizontal, History,
   Sparkles, FileText, Loader2, ShieldCheck,
 } from 'lucide-react';
 
@@ -163,7 +163,7 @@ export default function TicketDetailPage() {
 const [imageModal, setImageModal] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showTraceability, setShowTraceability] = useState(false);
-  const [replyChannel, setReplyChannel] = useState<'portal' | 'email' | 'whatsapp'>('portal');
+  const replyChannel = 'email' as const;
 
   // IA features
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
@@ -967,28 +967,6 @@ const [imageModal, setImageModal] = useState<string | null>(null);
           {/* ── Reply box ──────────────────────────────────────────── */}
           <div className="border-t bg-white px-4 py-3 shrink-0">
 
-            {/* Channel selector */}
-            {canAct && (
-              <div className="flex items-center gap-1 mb-2">
-                <span className="text-xs text-gray-400 mr-1">Responder por:</span>
-                {([
-                  { key: 'portal',    label: 'Portal',    Icon: Globe,         cls: 'text-violet-600 bg-violet-50 border-violet-200' },
-                  { key: 'email',     label: 'Email',     Icon: Mail,          cls: 'text-blue-600 bg-blue-50 border-blue-200' },
-                  { key: 'whatsapp',  label: 'WhatsApp',  Icon: MessageCircle, cls: 'text-green-600 bg-green-50 border-green-200' },
-                ] as const).map(({ key, label, Icon, cls }) => (
-                  <button
-                    key={key}
-                    onClick={() => setReplyChannel(key)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${
-                      replyChannel === key ? cls : 'text-gray-400 bg-white border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <Icon size={11} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* KB drawer overlay trigger — panel is rendered outside this column */}
 
