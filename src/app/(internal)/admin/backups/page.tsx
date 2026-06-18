@@ -67,6 +67,7 @@ export default function BackupsPage() {
   const [confirmText, setConfirmText] = useState('');
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [activeRestoreId, setActiveRestoreId] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const flash = (text: string, type: 'ok' | 'err' = 'ok') => {
@@ -150,6 +151,19 @@ export default function BackupsPage() {
       const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Error al disparar la restauración';
       flash(message, 'err');
       setRestoringId(null);
+    }
+  };
+
+  const handleDownload = async (backup: BackupLogItem) => {
+    setDownloadingId(backup.id);
+    try {
+      const { data } = await api.get(`/backups/${backup.id}/download`);
+      window.open(data.url, '_blank');
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Error al generar el enlace de descarga';
+      flash(message, 'err');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -248,14 +262,24 @@ export default function BackupsPage() {
                         </td>
                         <td className="p-3">
                           {backup.status === 'success' && (
-                            <button
-                              onClick={() => openConfirmModal(backup)}
-                              disabled={restoringId !== null}
-                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {restoringId === backup.id && <Loader2 size={14} className="animate-spin" />}
-                              Restaurar
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDownload(backup)}
+                                disabled={downloadingId !== null}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {downloadingId === backup.id && <Loader2 size={14} className="animate-spin" />}
+                                Descargar
+                              </button>
+                              <button
+                                onClick={() => openConfirmModal(backup)}
+                                disabled={restoringId !== null}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {restoringId === backup.id && <Loader2 size={14} className="animate-spin" />}
+                                Restaurar
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
