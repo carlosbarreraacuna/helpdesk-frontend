@@ -30,6 +30,7 @@ export interface WidgetChatMessage {
   sender?: { id: number; name: string };
   body: string;
   attachment_path: string | null;
+  attachment_url: string | null;
   attachment_name: string | null;
   is_read: boolean;
   read_at: string | null;

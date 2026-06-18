@@ -21,6 +21,7 @@ interface Ticket {
   requester_area: string;
   description: string;
   attachment_path: string | null;
+  attachment_url: string | null;
   verification_code: string;
   priority: 'alta' | 'media' | 'baja';
   status: { id: number; name: string; color: string };
@@ -54,6 +55,7 @@ interface WidgetMessage {
   sender_type: 'user' | 'agent' | 'system';
   sender: { id: number; name: string } | null;
   attachment_path: string | null;
+  attachment_url: string | null;
   attachment_name: string | null;
   created_at: string;
 }
@@ -66,6 +68,7 @@ interface TimelineEvent {
   isAgent: boolean;
   isBotContext?: boolean;
   attachment_path?: string | null;
+  attachment_url?: string | null;
   attachment_name?: string | null;
   attachments?: CommentAttachment[];
 }
@@ -177,7 +180,7 @@ export default function PortalTicketDetailPage() {
       addWidgetMessage({
         id: data.id, body: data.body, sender_type: data.sender_type,
         sender: data.sender ?? (data.sender_name ? { id: 0, name: data.sender_name } : null),
-        attachment_path: data.attachment_path, attachment_name: data.attachment_name,
+        attachment_path: data.attachment_path, attachment_url: data.attachment_url, attachment_name: data.attachment_name,
         created_at: data.created_at,
       });
     });
@@ -205,6 +208,7 @@ export default function PortalTicketDetailPage() {
       id: 'open', author: ticket.requester_name, content: ticket.description,
       timestamp: ticket.created_at, isAgent: false,
       attachment_path: ticket.attachment_path,
+      attachment_url: ticket.attachment_url,
     });
 
     comments.forEach(c => {
@@ -226,7 +230,7 @@ export default function PortalTicketDetailPage() {
         id: `w-${m.id}`, author: m.sender?.name ?? (m.sender_type === 'user' ? ticket.requester_name : 'Agente'),
         content: m.body, timestamp: m.created_at,
         isAgent: m.sender_type === 'agent',
-        attachment_path: m.attachment_path, attachment_name: m.attachment_name,
+        attachment_path: m.attachment_path, attachment_url: m.attachment_url, attachment_name: m.attachment_name,
       });
     });
 
@@ -511,13 +515,13 @@ export default function PortalTicketDetailPage() {
                   <div className="mt-2">
                     {isImage(event.attachment_path) ? (
                       <img
-                        src={`${API_STORAGE}/storage/${event.attachment_path}`}
+                        src={event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path}`}
                         alt="adjunto"
                         className="max-w-xs rounded-xl border border-gray-200 cursor-pointer hover:opacity-90 shadow-sm"
-                        onClick={() => setImageModal(`${API_STORAGE}/storage/${event.attachment_path!}`)}
+                        onClick={() => setImageModal(event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path!}`)}
                       />
                     ) : (
-                      <a href={`${API_STORAGE}/storage/${event.attachment_path}`} target="_blank" rel="noopener noreferrer"
+                      <a href={event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-200 transition">
                         <Paperclip className="w-3.5 h-3.5" /> Archivo adjunto
                       </a>
@@ -530,13 +534,13 @@ export default function PortalTicketDetailPage() {
                   <div className="mt-2">
                     {isImage(event.attachment_path) ? (
                       <img
-                        src={`${API_STORAGE}/storage/${event.attachment_path}`}
+                        src={event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path}`}
                         alt={event.attachment_name}
                         className="max-w-xs rounded-xl border border-gray-200 cursor-pointer hover:opacity-90 shadow-sm"
-                        onClick={() => setImageModal(`${API_STORAGE}/storage/${event.attachment_path!}`)}
+                        onClick={() => setImageModal(event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path!}`)}
                       />
                     ) : (
-                      <a href={`${API_STORAGE}/storage/${event.attachment_path}`} target="_blank" rel="noopener noreferrer"
+                      <a href={event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-200 transition">
                         <Paperclip className="w-3.5 h-3.5" /> {event.attachment_name}
                       </a>

@@ -156,7 +156,7 @@ export default function WidgetChat({ token, userId, userName }: Props) {
               <p className="whitespace-pre-wrap break-all">{msg.body}</p>
               {msg.attachment_name && (
                 <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL}/storage/${msg.attachment_path}`}
+                  href={msg.attachment_url ?? `${process.env.NEXT_PUBLIC_API_URL}/storage/${msg.attachment_path}`}
                   target="_blank"
                   rel="noreferrer"
                   className="block mt-1 text-xs underline opacity-80"

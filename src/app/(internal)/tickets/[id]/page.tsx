@@ -28,6 +28,7 @@ interface Ticket {
   requester_area: string;
   description: string;
   attachment_path: string | null;
+  attachment_url: string | null;
   verification_code: string;
   priority: string;
   status: { id: number; name: string; color: string };
@@ -89,6 +90,7 @@ interface WidgetMessage {
   sender_type: 'user' | 'agent' | 'system';
   sender: { id: number; name: string } | null;
   attachment_path: string | null;
+  attachment_url: string | null;
   attachment_name: string | null;
   created_at: string;
 }
@@ -100,9 +102,11 @@ interface TimelineEvent {
   content: string;
   timestamp: string;
   attachment_path?: string | null;
+  attachment_url?: string | null;
   attachment_name?: string | null;
   attachments?: CommentAttachment[];
   meta?: string;
+  meta_url?: string;
 }
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
@@ -257,6 +261,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
         sender_type: data.sender_type,
         sender: data.sender ?? (data.sender_name ? { id: 0, name: data.sender_name } : null),
         attachment_path: data.attachment_path,
+        attachment_url: data.attachment_url,
         attachment_name: data.attachment_name,
         created_at: data.created_at,
       });
@@ -529,6 +534,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
       content: ticket.description,
       timestamp: ticket.created_at,
       meta: ticket.attachment_path ?? undefined,
+      meta_url: ticket.attachment_url ?? undefined,
     });
 
     comments.forEach(c => {
@@ -552,6 +558,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
         content: m.body,
         timestamp: m.created_at,
         attachment_path: m.attachment_path,
+        attachment_url: m.attachment_url,
         attachment_name: m.attachment_name,
       });
     });
@@ -914,14 +921,14 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                       <div className="mt-2">
                         {isImage(event.meta) ? (
                           <img
-                            src={`${API_STORAGE}/storage/${event.meta}`}
+                            src={event.meta_url || `${API_STORAGE}/storage/${event.meta}`}
                             alt="adjunto"
                             className="max-w-xs rounded-xl border border-gray-200 cursor-pointer hover:opacity-90 transition shadow-sm"
-                            onClick={() => setImageModal(`${API_STORAGE}/storage/${event.meta}`)}
+                            onClick={() => setImageModal(event.meta_url || `${API_STORAGE}/storage/${event.meta}`)}
                           />
                         ) : (
                           <a
-                            href={`${API_STORAGE}/storage/${event.meta}`}
+                            href={event.meta_url || `${API_STORAGE}/storage/${event.meta}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-200 transition"
@@ -936,14 +943,14 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                       <div className="mt-2">
                         {isImage(event.attachment_path) ? (
                           <img
-                            src={`${API_STORAGE}/storage/${event.attachment_path}`}
+                            src={event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path}`}
                             alt={event.attachment_name ?? 'adjunto'}
                             className="max-w-xs rounded-xl border border-gray-200 cursor-pointer hover:opacity-90 transition shadow-sm"
-                            onClick={() => setImageModal(`${API_STORAGE}/storage/${event.attachment_path!}`)}
+                            onClick={() => setImageModal(event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path!}`)}
                           />
                         ) : (
                           <a
-                            href={`${API_STORAGE}/storage/${event.attachment_path}`}
+                            href={event.attachment_url || `${API_STORAGE}/storage/${event.attachment_path}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-200 transition"
