@@ -49,6 +49,8 @@ interface Ticket {
     id: number;
     name: string;
   };
+  sla_agent_due_at?: string | null;
+  sla_group_due_at?: string | null;
 }
 
 interface PaginatedResponse {
@@ -258,6 +260,19 @@ export default function TicketsPage() {
     }
   };
 
+  const formatSlaRemaining = (dueAt?: string | null) => {
+    if (!dueAt) return { text: 'Sin SLA propio', color: 'text-gray-400' };
+    const diffMs = new Date(dueAt).getTime() - Date.now();
+    const abs = Math.abs(diffMs) / (1000 * 60 * 60);
+    const hours = Math.floor(abs);
+    const minutes = Math.round((abs - hours) * 60);
+    const label = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    if (diffMs < 0) {
+      return { text: `Vencido hace ${label}`, color: 'text-red-600' };
+    }
+    return { text: `${label} restantes`, color: abs <= 4 ? 'text-yellow-600' : 'text-green-600' };
+  };
+
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
@@ -381,6 +396,8 @@ export default function TicketsPage() {
                     <TableHead className="py-2 px-3 text-xs font-medium hidden md:table-cell">Prioridad</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium">Estado</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium hidden lg:table-cell">Asignado a</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden xl:table-cell">SLA Agente</TableHead>
+                    <TableHead className="py-2 px-3 text-xs font-medium hidden xl:table-cell">SLA Grupo</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium hidden lg:table-cell">Área</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium hidden md:table-cell">Fecha</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium text-right">Acciones</TableHead>
@@ -446,6 +463,16 @@ export default function TicketsPage() {
                         ) : (
                           <span className="text-xs text-gray-400">Sin asignar</span>
                         )}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 hidden xl:table-cell">
+                        <span className={`text-xs ${formatSlaRemaining(ticket.sla_agent_due_at).color}`}>
+                          {formatSlaRemaining(ticket.sla_agent_due_at).text}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-2 px-3 hidden xl:table-cell">
+                        <span className={`text-xs ${formatSlaRemaining(ticket.sla_group_due_at).color}`}>
+                          {formatSlaRemaining(ticket.sla_group_due_at).text}
+                        </span>
                       </TableCell>
                       <TableCell className="py-2 px-3 hidden lg:table-cell">
                         <span className="text-xs text-gray-600">
