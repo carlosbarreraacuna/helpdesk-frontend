@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle2, AlertTriangle, XCircle, Save, Timer, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Save, Timer, RefreshCw, Download, History } from 'lucide-react';
 
 interface SlaConfig {
   id: number;
@@ -36,6 +36,15 @@ interface BreachedTicket {
 interface DashboardSummary {
   summary: { on_track: number; at_risk: number; breached: number };
   breached_tickets: BreachedTicket[];
+}
+
+interface SlaHistoryEntry {
+  id: number;
+  old_value: string;
+  new_value: string;
+  created_at: string;
+  ticket: { id: number; ticket_number: string; requester_name: string; priority: string } | null;
+  user: { id: number; name: string; email: string } | null;
 }
 
 const PRIORITY_LABEL: Record<string, string> = {
@@ -204,11 +213,196 @@ function SlaConfigCard({
   );
 }
 
+function SlaHistorySection() {
+  const [entries, setEntries] = useState<SlaHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [filters, setFilters] = useState({ date_from: '', date_to: '' });
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
+
+  const loadHistory = async (page = 1) => {
+    setLoading(true);
+    try {
+      const res = await api.get('/sla/history', {
+        params: { ...filters, page },
+      });
+      setEntries(res.data.data);
+      setPagination({
+        current_page: res.data.current_page,
+        last_page: res.data.last_page,
+        total: res.data.total,
+      });
+    } catch (error) {
+      console.error('Error loading SLA history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get('/sla/history/export', {
+        params: filters,
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sla_recalculos_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Error al descargar el reporte de SLA');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-4 w-4" />
+              Historial de cambios de SLA
+            </CardTitle>
+            <CardDescription>
+              Tickets cuyo SLA se recalculó manualmente — evidencia de auditoría
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            disabled={downloading || pagination.total === 0}
+            className="h-8 text-xs"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            {downloading ? 'Descargando...' : 'Descargar reporte (CSV)'}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3 mb-4">
+          <div>
+            <Label className="text-xs">Desde</Label>
+            <Input
+              type="date"
+              value={filters.date_from}
+              onChange={e => setFilters(prev => ({ ...prev, date_from: e.target.value }))}
+              className="h-9 text-sm mt-1"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Hasta</Label>
+            <Input
+              type="date"
+              value={filters.date_to}
+              onChange={e => setFilters(prev => ({ ...prev, date_to: e.target.value }))}
+              className="h-9 text-sm mt-1"
+            />
+          </div>
+        </div>
+
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50/50">
+              <tr>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Ticket</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Prioridad</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">SLA anterior</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">SLA nuevo</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Modificado por</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-6">
+                    <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  </td>
+                </tr>
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-6 text-xs text-gray-500">
+                    No hay cambios de SLA registrados en este rango
+                  </td>
+                </tr>
+              ) : (
+                entries.map(entry => (
+                  <tr key={entry.id} className="border-t border-gray-100 hover:bg-gray-50/50">
+                    <td className="py-2 px-3 text-xs font-medium text-gray-900">
+                      {entry.ticket ? `#${entry.ticket.ticket_number}` : '—'}
+                    </td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOR[entry.ticket?.priority ?? ''] ?? 'text-gray-600 bg-gray-50 border-gray-200'}`}
+                      >
+                        {PRIORITY_LABEL[entry.ticket?.priority ?? ''] ?? entry.ticket?.priority ?? 'N/A'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{entry.old_value}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{entry.new_value}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{entry.user?.name ?? 'Sistema'}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">
+                      {new Date(entry.created_at).toLocaleString('es-ES')}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {pagination.last_page > 1 && (
+          <div className="flex items-center justify-between mt-4 text-xs">
+            <div className="text-gray-600">{pagination.total} cambios en total</div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadHistory(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="h-8 text-xs px-3"
+              >
+                Anterior
+              </Button>
+              <span className="text-gray-600">
+                Página {pagination.current_page} de {pagination.last_page}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadHistory(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.last_page}
+                className="h-8 text-xs px-3"
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SlaSettingsPage() {
   const [configs, setConfigs] = useState<SlaConfig[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -243,6 +437,7 @@ export default function SlaSettingsPage() {
       const res = await api.post('/sla/recalculate');
       alert(res.data.message);
       await load();
+      setHistoryRefreshKey(k => k + 1);
     } catch (error: any) {
       alert(error.response?.data?.message || 'Error al recalcular el SLA');
     } finally {
@@ -364,6 +559,9 @@ export default function SlaSettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Historial de cambios de SLA + reporte descargable */}
+      <SlaHistorySection key={historyRefreshKey} />
     </div>
   );
 }
