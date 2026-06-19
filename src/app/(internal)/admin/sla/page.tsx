@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle2, AlertTriangle, XCircle, Save, Timer } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Save, Timer, RefreshCw } from 'lucide-react';
 
 interface SlaConfig {
   id: number;
@@ -208,6 +208,7 @@ export default function SlaSettingsPage() {
   const [configs, setConfigs] = useState<SlaConfig[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recalculating, setRecalculating] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -233,6 +234,22 @@ export default function SlaSettingsPage() {
     setConfigs(prev => prev.map(c => (c.id === updated.id ? updated : c)));
   };
 
+  const handleRecalculate = async () => {
+    if (!confirm('Esto recalculará las fechas límite de SLA de todos los tickets abiertos usando la configuración actual. ¿Continuar?')) {
+      return;
+    }
+    setRecalculating(true);
+    try {
+      const res = await api.post('/sla/recalculate');
+      alert(res.data.message);
+      await load();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Error al recalcular el SLA');
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -243,9 +260,21 @@ export default function SlaSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Timer className="h-5 w-5 text-gray-700" />
-        <h1 className="text-lg font-semibold text-gray-900">Parametrización de SLA</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Timer className="h-5 w-5 text-gray-700" />
+          <h1 className="text-lg font-semibold text-gray-900">Parametrización de SLA</h1>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRecalculate}
+          disabled={recalculating}
+          className="h-8 text-xs"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${recalculating ? 'animate-spin' : ''}`} />
+          {recalculating ? 'Recalculando...' : 'Recalcular SLA de tickets abiertos'}
+        </Button>
       </div>
 
       {/* Resumen de cumplimiento */}
