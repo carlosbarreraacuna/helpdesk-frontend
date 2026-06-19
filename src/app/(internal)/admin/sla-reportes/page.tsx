@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import {
   CheckCircle2, AlertTriangle, XCircle, BarChart3,
-  ChevronDown, ChevronRight, FileSpreadsheet, FileText,
+  ChevronDown, ChevronRight, FileSpreadsheet, FileText, Search,
 } from 'lucide-react';
 
 interface BreachedTicket {
@@ -36,7 +36,6 @@ interface BreachedTicket {
 
 interface DashboardSummary {
   summary: { on_track: number; at_risk: number; breached: number };
-  breached_tickets: BreachedTicket[];
 }
 
 interface SlaReportTicket {
@@ -59,6 +58,152 @@ interface SlaReportGroup {
   breached: number;
   compliance_pct: number;
   tickets: SlaReportTicket[];
+}
+
+function BreachedTicketsSection() {
+  const [tickets, setTickets] = useState<BreachedTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [priority, setPriority] = useState('all');
+  const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, per_page: 10, total: 0 });
+
+  const load = async (page = 1) => {
+    setLoading(true);
+    try {
+      const res = await api.get('/sla/breached-tickets', {
+        params: { search, priority, page, per_page: pagination.per_page },
+      });
+      setTickets(res.data.data);
+      setPagination({
+        current_page: res.data.current_page,
+        last_page: res.data.last_page,
+        per_page: res.data.per_page,
+        total: res.data.total,
+      });
+    } catch (error) {
+      console.error('Error loading breached tickets:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, priority]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Tickets con SLA incumplido</CardTitle>
+        <CardDescription>Requieren atención inmediata</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Buscar por ticket o solicitante..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
+          <Select value={priority} onValueChange={setPriority}>
+            <SelectTrigger className="w-32 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="media">Media</SelectItem>
+              <SelectItem value="baja">Baja</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50/50">
+              <tr>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Ticket</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Solicitante</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Prioridad</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Vencimiento</th>
+                <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Asignado a</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-6">
+                    <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  </td>
+                </tr>
+              ) : tickets.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-6 text-xs text-gray-500">
+                    No hay tickets con SLA incumplido
+                  </td>
+                </tr>
+              ) : (
+                tickets.map(ticket => (
+                  <tr key={ticket.id} className="border-t border-gray-100 hover:bg-gray-50/50">
+                    <td className="py-2 px-3 text-xs font-medium text-gray-900">
+                      #{ticket.ticket_number}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{ticket.requester_name}</td>
+                    <td className="py-2 px-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOR[ticket.priority] ?? 'text-gray-600 bg-gray-50 border-gray-200'}`}
+                      >
+                        {PRIORITY_LABEL[ticket.priority] ?? ticket.priority}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-xs text-gray-600">
+                      {new Date(ticket.due_at).toLocaleString('es-ES')}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-gray-600">
+                      {ticket.assigned_to ?? 'Sin asignar'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {pagination.last_page > 1 && (
+          <div className="flex items-center justify-between mt-4 text-xs">
+            <div className="text-gray-600">{pagination.total} ticket(s) incumplido(s)</div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => load(pagination.current_page - 1)}
+                disabled={pagination.current_page === 1}
+                className="h-8 text-xs px-3"
+              >
+                Anterior
+              </Button>
+              <span className="text-gray-600">
+                Página {pagination.current_page} de {pagination.last_page}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => load(pagination.current_page + 1)}
+                disabled={pagination.current_page === pagination.last_page}
+                className="h-8 text-xs px-3"
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function SlaReportSection() {
@@ -406,52 +551,7 @@ export default function SlaReportesPage() {
       )}
 
       {/* Tickets incumplidos */}
-      {dashboard && dashboard.breached_tickets.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Tickets con SLA incumplido</CardTitle>
-            <CardDescription>Requieren atención inmediata</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50/50">
-                  <tr>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Ticket</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Solicitante</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Prioridad</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Vencimiento</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Asignado a</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboard.breached_tickets.map(ticket => (
-                    <tr key={ticket.id} className="border-t border-gray-100 hover:bg-gray-50/50">
-                      <td className="py-2 px-3 text-xs font-medium text-gray-900">
-                        #{ticket.ticket_number}
-                      </td>
-                      <td className="py-2 px-3 text-xs text-gray-600">{ticket.requester_name}</td>
-                      <td className="py-2 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOR[ticket.priority] ?? 'text-gray-600 bg-gray-50 border-gray-200'}`}
-                        >
-                          {PRIORITY_LABEL[ticket.priority] ?? ticket.priority}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-xs text-gray-600">
-                        {new Date(ticket.due_at).toLocaleString('es-ES')}
-                      </td>
-                      <td className="py-2 px-3 text-xs text-gray-600">
-                        {ticket.assigned_to ?? 'Sin asignar'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <BreachedTicketsSection />
 
       {/* Cumplimiento de SLA por agente / grupo */}
       <SlaReportSection />
