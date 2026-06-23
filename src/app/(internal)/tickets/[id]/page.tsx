@@ -378,6 +378,9 @@ const [imageModal, setImageModal] = useState<string | null>(null);
       form.append('message', text);
       await api.post(`/tickets/${ticketId}/reply-channel`, form);
       flash('Respuesta enviada por Email');
+      // El backend puede haber movido el ticket a "en_progreso" — refrescar
+      // el estado mostrado sin esperar al polling de validación.
+      api.get(`/tickets/${ticketId}`).then(r => setTicket(r.data)).catch(() => {});
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || 'Error al enviar');
