@@ -33,7 +33,7 @@ interface Props {
 export default function PortalCreateTicketModal({ user, onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ ticketNumber: string; category: string | null; assignedAgent: string | null } | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState<{ priority: string; category_id: number | null; reason: string } | null>(null);
@@ -92,7 +92,11 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
       const res = await api.post('/portal/tickets', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setSuccess(res.data.ticket_number);
+      setSuccess({
+        ticketNumber: res.data.ticket_number,
+        category: res.data.category ?? null,
+        assignedAgent: res.data.assigned_agent ?? null,
+      });
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setError(e.response?.data?.message || 'Error al crear el ticket');
@@ -121,9 +125,21 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
             </div>
             <h3 className="text-lg font-semibold text-gray-900">¡Solicitud Creada!</h3>
             <p className="text-gray-500 text-sm">Tu solicitud ha sido registrada exitosamente.</p>
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-1">Número de ticket</p>
-              <p className="text-2xl font-bold text-primary font-mono">{success}</p>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Número de ticket</p>
+                <p className="text-2xl font-bold text-primary font-mono">{success.ticketNumber}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
+                <div className="text-left">
+                  <p className="text-xs text-gray-500 mb-0.5">Categoría</p>
+                  <p className="text-sm font-medium text-gray-800">{success.category ?? 'Sin categoría'}</p>
+                </div>
+                <div className="text-left">
+                  <p className="text-xs text-gray-500 mb-0.5">Asignado a</p>
+                  <p className="text-sm font-medium text-gray-800">{success.assignedAgent ?? 'Pendiente de asignación'}</p>
+                </div>
+              </div>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={onClose} className="flex-1">Cerrar</Button>
