@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth-store';
 import api from '@/lib/api';
+import { TICKET_STATUS_LABEL } from '@/lib/ticket-status';
 import { Button } from '@/components/ui/button';
 import {
   Plus, Search, Ticket, Clock, CheckCircle2, AlertCircle,
@@ -38,17 +39,7 @@ interface TicketStatus {
   color: string;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  nuevo: 'Nuevo',
-  asignado: 'Asignado',
-  en_progreso: 'En proceso',
-  pendiente_usuario: 'Pendiente usuario',
-  escalado: 'Escalado',
-  resuelto: 'Resuelto',
-  pendiente_validacion: 'Pendiente validación',
-  cerrado: 'Cerrado',
-  reabierto: 'Reabierto',
-};
+const STATUS_LABEL = TICKET_STATUS_LABEL;
 
 const PRIORITY_LABEL: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 const PRIORITY_COLOR: Record<string, string> = {

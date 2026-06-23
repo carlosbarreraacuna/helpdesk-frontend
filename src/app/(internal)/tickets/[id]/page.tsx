@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { usePermission } from '@/lib/use-permission';
+import { ticketStatusLabel } from '@/lib/ticket-status';
 import { getEcho } from '@/lib/echo';
 import TicketMeetingsPanel from '@/components/meetings/TicketMeetingsPanel';
 import TicketTraceabilityDrawer from '@/components/tickets/TicketTraceabilityDrawer';
@@ -15,7 +17,7 @@ import RemoteSessionPanel from '@/components/tickets/RemoteSessionPanel';
 import {
   ArrowLeft, Send, Clock, Tag, AlertCircle, CheckCircle2,
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
-  BookOpen, Search, ExternalLink, RotateCcw,
+  BookOpen, Search, ExternalLink, RotateCcw, Undo2,
   Mail, Users, UserPlus, Trash2, SlidersHorizontal, History,
   Sparkles, FileText, Loader2, ShieldCheck,
 } from 'lucide-react';
@@ -192,6 +194,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const canAct = currentUser?.role?.name !== 'usuario' && currentUser?.role?.name !== 'user';
+  const canReopen = usePermission('tickets.reopen');
 
   const addWidgetMessageToTimeline = useCallback((msg: WidgetMessage) => {
     setWidgetMessages(prev =>
@@ -245,6 +248,18 @@ const [imageModal, setImageModal] = useState<string | null>(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments, widgetMessages]);
+
+  // Mientras se espera la validación del usuario, refrescar el ticket
+  // periódicamente para detectar el cambio de estado a "validacion_aprobada"
+  // y habilitar "Cerrar" sin que el agente tenga que recargar la página
+  // (no hay evento de WebSocket para cambios de estado).
+  useEffect(() => {
+    if (!ticket || ticket.status.name !== 'pendiente_validacion') return;
+    const interval = setInterval(() => {
+      api.get(`/tickets/${ticketId}`).then(r => setTicket(r.data)).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [ticket?.status?.name, ticketId]);
 
   // Real-time: suscribirse al canal del widget para recibir mensajes nuevos
   useEffect(() => {
@@ -495,6 +510,21 @@ const [imageModal, setImageModal] = useState<string | null>(null);
     }
   };
 
+  const handleReopen = async () => {
+    if (!confirm('¿Reabrir este ticket cerrado?')) return;
+    setActionLoading('reopen');
+    try {
+      await api.post(`/tickets/${ticketId}/reopen`);
+      await loadAll();
+      flash('Ticket reabierto correctamente');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setError(e.response?.data?.message || 'Error al reabrir ticket');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
   const searchParticipants = (q: string) => {
     setParticipantSearch(q);
     if (q.trim().length < 2) { setParticipantResults([]); return; }
@@ -704,7 +734,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
             className="hidden sm:inline px-3 py-1 rounded-full text-xs font-semibold border"
             style={{ backgroundColor: ticket.status.color + '22', color: ticket.status.color, borderColor: ticket.status.color + '55' }}
           >
-            {ticket.status.name}
+            {ticketStatusLabel(ticket.status.name)}
           </span>
           {/* Prioridad badge */}
           <span className={`hidden sm:inline px-3 py-1 rounded-full text-xs font-semibold border ${prioConf.bg} ${prioConf.color}`}>
@@ -1186,7 +1216,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                         <SelectItem key={s.id} value={s.id.toString()}>
                           <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                            {s.name}
+                            {ticketStatusLabel(s.name)}
                           </div>
                         </SelectItem>
                       ))}
@@ -1283,7 +1313,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                 </div>
 
                 {/* Validation status banner */}
-                {ticket?.validation_requested_at && !ticket?.validation_approved_at && (
+                {ticket?.status.name === 'pendiente_validacion' && (
                   <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
                     <div className="flex items-center gap-1.5 font-semibold mb-0.5">
                       <ShieldCheck size={13} />
@@ -1305,12 +1335,27 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                   </div>
                 )}
 
-                {ticket?.validation_approved_at && (
+                {ticket?.status.name === 'resuelto' && (
                   <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-800">
                     <div className="flex items-center gap-1.5 font-semibold">
                       <CheckCircle2 size={13} />
                       Usuario confirmó la solución — puedes cerrar el ticket
                     </div>
+                  </div>
+                )}
+
+                {ticket?.status.name === 'cerrado' && canReopen && (
+                  <div className="mb-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full border-red-200 text-red-700 hover:bg-red-50 text-xs"
+                      onClick={handleReopen}
+                      disabled={actionLoading === 'reopen'}
+                    >
+                      <Undo2 size={13} className="mr-1.5" />
+                      {actionLoading === 'reopen' ? '...' : 'Reabrir ticket'}
+                    </Button>
                   </div>
                 )}
 
@@ -1320,8 +1365,8 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                     {actionLoading === 'escalate' ? '...' : 'Escalar'}
                   </Button>
 
-                  {/* Show "Solicitar validación" when no pending validation and not already approved */}
-                  {!ticket?.validation_requested_at && !ticket?.validation_approved_at && (
+                  {/* Show "Solicitar validación" when no pending validation and not already resolved/closed */}
+                  {!['pendiente_validacion', 'resuelto', 'cerrado'].includes(ticket?.status.name ?? '') && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1330,25 +1375,11 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                       disabled={actionLoading === 'request-validation'}
                     >
                       <ShieldCheck size={13} className="mr-1.5" />
-                      {actionLoading === 'request-validation' ? '...' : 'Pedir validación'}
+                      {actionLoading === 'request-validation' ? '...' : ((ticket?.validation_rejected_count ?? 0) > 0 ? 'Reenviar validación' : 'Pedir validación')}
                     </Button>
                   )}
 
-                  {/* Re-send validation if rejected */}
-                  {ticket?.validation_requested_at === null && (ticket?.validation_rejected_count ?? 0) > 0 && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-200 text-amber-700 hover:bg-amber-50 text-xs"
-                      onClick={handleRequestValidation}
-                      disabled={actionLoading === 'request-validation'}
-                    >
-                      <ShieldCheck size={13} className="mr-1.5" />
-                      {actionLoading === 'request-validation' ? '...' : 'Reenviar validación'}
-                    </Button>
-                  )}
-
-                  {/* Close only enabled when approved or no validation ever requested */}
+                  {/* Close only enabled outside pendiente_validacion */}
                   <Button
                     size="sm"
                     variant="destructive"
@@ -1356,10 +1387,10 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                     onClick={handleClose}
                     disabled={
                       actionLoading === 'close' ||
-                      (!!ticket?.validation_requested_at && !ticket?.validation_approved_at)
+                      ticket?.status.name === 'pendiente_validacion'
                     }
                     title={
-                      ticket?.validation_requested_at && !ticket?.validation_approved_at
+                      ticket?.status.name === 'pendiente_validacion'
                         ? 'Esperando validación del usuario'
                         : undefined
                     }

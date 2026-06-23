@@ -17,6 +17,7 @@ import CreateTicketModal from '@/components/CreateTicketModal';
 import api from '@/lib/api';
 import { getEcho } from '@/lib/echo';
 import { useAuthStore } from '@/lib/auth-store';
+import { ticketStatusLabel } from '@/lib/ticket-status';
 import {
   ChevronLeft,
   ChevronRight,
@@ -332,7 +333,7 @@ export default function TicketsPage() {
               <SelectItem value="all">Todos los estados</SelectItem>
               {statuses.map(status => (
                 <SelectItem key={status.id} value={status.id.toString()}>
-                  {status.name}
+                  {ticketStatusLabel(status.name)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -447,7 +448,7 @@ export default function TicketsPage() {
                             color: ticket.status.color
                           }}
                         >
-                          {ticket.status.name}
+                          {ticketStatusLabel(ticket.status.name)}
                         </span>
                       </TableCell>
                       <TableCell className="py-2 px-3 hidden lg:table-cell">

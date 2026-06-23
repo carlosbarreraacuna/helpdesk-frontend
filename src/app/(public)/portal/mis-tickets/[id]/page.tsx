@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth-store';
 import api from '@/lib/api';
 import { getEcho } from '@/lib/echo';
+import { ticketStatusLabel } from '@/lib/ticket-status';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -362,7 +363,7 @@ export default function PortalTicketDetailPage() {
             className="px-2.5 py-1 rounded-full text-xs font-semibold border"
             style={{ backgroundColor: ticket.status.color + '22', color: ticket.status.color, borderColor: ticket.status.color + '55' }}
           >
-            {ticket.status.name}
+            {ticketStatusLabel(ticket.status.name)}
           </span>
           <span className={`hidden sm:inline px-2.5 py-1 rounded-full text-xs font-semibold border ${PRIORITY_COLOR[ticket.priority]}`}>
             {PRIORITY_LABEL[ticket.priority]}
@@ -567,7 +568,7 @@ export default function PortalTicketDetailPage() {
         )}
 
         {/* Validation request — interactive chat card, stays in the conversation */}
-        {ticket.status.name === 'pendiente_validacion' && !ticket.validation_approved_at && (
+        {ticket.status.name === 'pendiente_validacion' && (
           <div className="flex justify-center">
             <div className="w-full max-w-md rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
