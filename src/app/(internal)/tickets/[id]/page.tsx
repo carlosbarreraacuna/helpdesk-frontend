@@ -19,7 +19,7 @@ import {
   UserCheck, XCircle, TrendingUp, Paperclip, MessageSquare,
   BookOpen, Search, ExternalLink, RotateCcw, Undo2,
   Mail, Users, UserPlus, Trash2, SlidersHorizontal, History,
-  Sparkles, FileText, Loader2, ShieldCheck,
+  Sparkles, FileText, Loader2, ShieldCheck, HelpCircle,
 } from 'lucide-react';
 
 interface Ticket {
@@ -1323,8 +1323,15 @@ const [imageModal, setImageModal] = useState<string | null>(null);
                       El usuario debe confirmar que la solución fue satisfactoria antes de poder cerrar el ticket.
                     </p>
                     {ticket.validation_deadline && (
-                      <p className="mt-1 text-amber-600">
+                      <p className="mt-1 text-amber-600 flex items-center gap-1">
                         Plazo: {new Date(ticket.validation_deadline).toLocaleString('es-CO')}
+                        <span className="relative group inline-flex">
+                          <HelpCircle size={12} className="text-amber-500 cursor-help" />
+                          <span className="invisible group-hover:visible absolute z-10 bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 rounded-lg bg-gray-800 text-white text-[11px] leading-snug px-2.5 py-2 shadow-lg normal-case font-normal">
+                            Este plazo es el tiempo que tiene el usuario para validar la solución. Si no responde antes de esa fecha, el ticket se cerrará automáticamente.
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                          </span>
+                        </span>
                       </p>
                     )}
                     {(ticket.validation_rejected_count ?? 0) > 0 && (
