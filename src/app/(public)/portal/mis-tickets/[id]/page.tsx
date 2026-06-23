@@ -71,6 +71,15 @@ interface TimelineEvent {
   attachment_url?: string | null;
   attachment_name?: string | null;
   attachments?: CommentAttachment[];
+  isValidationLog?: boolean;
+  validationAction?: 'requested' | 'approved' | 'rejected';
+}
+
+interface ValidationHistoryEntry {
+  action: 'requested' | 'approved' | 'rejected';
+  comment: string | null;
+  by: string | null;
+  created_at: string;
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -109,6 +118,7 @@ export default function PortalTicketDetailPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [widgetMessages, setWidgetMessages] = useState<WidgetMessage[]>([]);
   const [widgetSessionId, setWidgetSessionId] = useState<number | null>(null);
+  const [validationHistory, setValidationHistory] = useState<ValidationHistoryEntry[]>([]);
   const [newComment, setNewComment] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -144,6 +154,10 @@ export default function PortalTicketDetailPage() {
           setWidgetMessages(r.data.messages ?? []);
         })
         .catch(() => {});
+
+      api.get(`/tickets/${ticketId}/validation-status`)
+        .then(r => setValidationHistory(r.data.history ?? []))
+        .catch(() => {});
     } catch {
       setError('No se pudo cargar la solicitud');
     } finally {
@@ -160,7 +174,7 @@ export default function PortalTicketDetailPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [comments, widgetMessages]);
+  }, [comments, widgetMessages, validationHistory, ticket?.status?.name]);
 
   const addWidgetMessage = useCallback((msg: WidgetMessage) => {
     setWidgetMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
@@ -231,6 +245,18 @@ export default function PortalTicketDetailPage() {
         content: m.body, timestamp: m.created_at,
         isAgent: m.sender_type === 'agent',
         attachment_path: m.attachment_path, attachment_url: m.attachment_url, attachment_name: m.attachment_name,
+      });
+    });
+
+    validationHistory.forEach((v, idx) => {
+      events.push({
+        id: `vlog-${idx}`,
+        author: 'Sistema',
+        content: v.comment ?? '',
+        timestamp: v.created_at,
+        isAgent: false,
+        isValidationLog: true,
+        validationAction: v.action,
       });
     });
 
@@ -388,83 +414,31 @@ export default function PortalTicketDetailPage() {
         </div>
       )}
 
-      {/* Validation banner */}
-      {ticket.status.name === 'pendiente_validacion' && !ticket.validation_approved_at && (
-        <div className="mx-4 mt-3 shrink-0">
-          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
-              <span className="font-semibold text-amber-900 text-sm">
-                ¿La solución fue satisfactoria?
-              </span>
-            </div>
-            <p className="text-xs text-amber-800 mb-3">
-              El equipo de soporte resolvió tu solicitud. Por favor confirma si todo está correcto o indícanos qué problema persiste.
-            </p>
-
-            {ticket.validation_deadline && (
-              <p className="text-xs text-amber-700 mb-3">
-                Plazo para responder: <strong>{new Date(ticket.validation_deadline).toLocaleString('es-CO')}</strong>
-              </p>
-            )}
-
-            {validatingAction === null && (
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => setValidatingAction('approved')}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Todo está correcto
-                </button>
-                <button
-                  onClick={() => setValidatingAction('rejected')}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition"
-                >
-                  <XCircle className="w-3.5 h-3.5" /> Aún hay problemas
-                </button>
-              </div>
-            )}
-
-            {validatingAction !== null && (
-              <div className="mt-2 space-y-2">
-                <textarea
-                  className="w-full border border-amber-300 rounded-lg p-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                  rows={3}
-                  placeholder={
-                    validatingAction === 'rejected'
-                      ? 'Describe qué problema persiste... (obligatorio)'
-                      : 'Comentario adicional (opcional)'
-                  }
-                  value={validationComment}
-                  onChange={e => setValidationComment(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleValidate(validatingAction)}
-                    disabled={validationLoading || (validatingAction === 'rejected' && !validationComment.trim())}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 ${
-                      validatingAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
-                    }`}
-                  >
-                    {validationLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                    {validatingAction === 'approved' ? 'Confirmar — todo correcto' : 'Confirmar — hay problemas'}
-                  </button>
-                  <button
-                    onClick={() => { setValidatingAction(null); setValidationComment(''); }}
-                    className="px-3 py-2 border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 transition"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Chat / Timeline */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
         {timeline.map((event, idx) => {
+          if (event.isValidationLog) {
+            const cfg = {
+              requested: { icon: ShieldCheck, text: 'Se solicitó tu validación de la solución', cls: 'bg-amber-50 border-amber-200 text-amber-800' },
+              approved: { icon: CheckCircle2, text: 'Confirmaste que la solución fue correcta', cls: 'bg-green-50 border-green-200 text-green-700' },
+              rejected: { icon: XCircle, text: 'Indicaste que el problema persiste', cls: 'bg-red-50 border-red-200 text-red-700' },
+            }[event.validationAction!];
+            const Icon = cfg.icon;
+            return (
+              <div key={event.id} className="flex justify-center">
+                <div className={`flex flex-col items-center gap-1 max-w-md text-center px-4 py-2.5 rounded-xl border text-xs ${cfg.cls}`}>
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <Icon className="w-3.5 h-3.5 shrink-0" /> {cfg.text}
+                  </div>
+                  {event.content && <p className="opacity-80">&ldquo;{event.content}&rdquo;</p>}
+                  <span className="text-[10px] opacity-60">
+                    {new Date(event.timestamp).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
+                  </span>
+                </div>
+              </div>
+            );
+          }
+
           if (event.isBotContext) {
             return (
               <div key={event.id} className="mx-1">
@@ -589,6 +563,80 @@ export default function PortalTicketDetailPage() {
           <div className="text-center py-12 text-gray-400">
             <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No hay mensajes aún</p>
+          </div>
+        )}
+
+        {/* Validation request — interactive chat card, stays in the conversation */}
+        {ticket.status.name === 'pendiente_validacion' && !ticket.validation_approved_at && (
+          <div className="flex justify-center">
+            <div className="w-full max-w-md rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="font-semibold text-amber-900 text-sm">
+                  ¿La solución fue satisfactoria?
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mb-3">
+                El equipo de soporte resolvió tu solicitud. Por favor confirma si todo está correcto o indícanos qué problema persiste.
+              </p>
+
+              {ticket.validation_deadline && (
+                <p className="text-xs text-amber-700 mb-3">
+                  Plazo para responder: <strong>{new Date(ticket.validation_deadline).toLocaleString('es-CO')}</strong>
+                </p>
+              )}
+
+              {validatingAction === null && (
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setValidatingAction('approved')}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Todo está correcto
+                  </button>
+                  <button
+                    onClick={() => setValidatingAction('rejected')}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition"
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> Aún hay problemas
+                  </button>
+                </div>
+              )}
+
+              {validatingAction !== null && (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    className="w-full border border-amber-300 rounded-lg p-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    rows={3}
+                    placeholder={
+                      validatingAction === 'rejected'
+                        ? 'Describe qué problema persiste... (obligatorio)'
+                        : 'Comentario adicional (opcional)'
+                    }
+                    value={validationComment}
+                    onChange={e => setValidationComment(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleValidate(validatingAction)}
+                      disabled={validationLoading || (validatingAction === 'rejected' && !validationComment.trim())}
+                      className={`flex items-center gap-1.5 px-4 py-2 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 ${
+                        validatingAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                      }`}
+                    >
+                      {validationLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      {validatingAction === 'approved' ? 'Confirmar — todo correcto' : 'Confirmar — hay problemas'}
+                    </button>
+                    <button
+                      onClick={() => { setValidatingAction(null); setValidationComment(''); }}
+                      className="px-3 py-2 border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 transition"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

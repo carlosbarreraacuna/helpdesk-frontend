@@ -204,6 +204,7 @@ const [imageModal, setImageModal] = useState<string | null>(null);
       const tRes = await api.get(`/tickets/${ticketId}`);
       setTicket(tRes.data);
       setStatusId(tRes.data.status.id.toString());
+      setAssignUserId(tRes.data.assigned_to ? String(tRes.data.assigned_to) : '');
 
       // Requests secundarios no bloquean la carga del ticket
       api.get(`/tickets/${ticketId}/comments`)
