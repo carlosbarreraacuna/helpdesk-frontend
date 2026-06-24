@@ -86,8 +86,10 @@ export default function MetricCard({ metric, filters }: { metric: Report; filter
           ) : (
             <>
               <p className="text-3xl font-bold mb-1">
-                {metric.config.format === 'hours' 
-                  ? `${data?.value}h` 
+                {metric.config.format === 'hours'
+                  ? `${data?.value}h`
+                  : metric.config.format === 'percent'
+                  ? `${data?.value}%`
                   : data?.value?.toLocaleString()}
               </p>
               {data?.change && (

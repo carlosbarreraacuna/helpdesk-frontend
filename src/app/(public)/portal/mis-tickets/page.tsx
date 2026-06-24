@@ -58,7 +58,7 @@ export default function MisTicketsPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [stats, setStats] = useState({ total: 0, abiertos: 0, resueltos: 0 });
+  const [stats, setStats] = useState({ total: 0, abiertos: 0, resueltos: 0, pendiente_validacion: 0 });
   const [statuses, setStatuses] = useState<TicketStatus[]>([]);
 
   useEffect(() => {
@@ -69,6 +69,15 @@ export default function MisTicketsPage() {
     api.get('/ticket-statuses').then(r => setStatuses(r.data)).catch(() => {});
   }, [isAuthenticated, user, router]);
 
+  const fetchStats = async () => {
+    try {
+      const res = await api.get('/portal/my-tickets-stats');
+      setStats(res.data);
+    } catch {
+      // keep previous stats on failure
+    }
+  };
+
   const fetchTickets = async () => {
     setLoading(true);
     try {
@@ -78,11 +87,6 @@ export default function MisTicketsPage() {
       const res = await api.get('/tickets', { params });
       const data: TicketItem[] = res.data.data ?? res.data;
       setTickets(data);
-      setStats({
-        total: data.length,
-        abiertos: data.filter(t => !['cerrado', 'resuelto'].includes(t.status.name)).length,
-        resueltos: data.filter(t => ['cerrado', 'resuelto'].includes(t.status.name)).length,
-      });
     } catch {
       setTickets([]);
     } finally {
@@ -90,6 +94,7 @@ export default function MisTicketsPage() {
     }
   };
 
+  useEffect(() => { fetchStats(); }, []);
   useEffect(() => { fetchTickets(); }, [search, filterStatus]);
 
   const getStatusIcon = (name: string) => {
@@ -117,7 +122,7 @@ export default function MisTicketsPage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
             <div className="bg-gray-50 rounded-xl p-4 border">
               <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total</p>
               <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
@@ -125,6 +130,10 @@ export default function MisTicketsPage() {
             <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
               <p className="text-xs text-blue-600 uppercase tracking-wide mb-1">En proceso</p>
               <p className="text-2xl font-bold text-blue-700">{stats.abiertos}</p>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+              <p className="text-xs text-amber-600 uppercase tracking-wide mb-1">Por validar</p>
+              <p className="text-2xl font-bold text-amber-700">{stats.pendiente_validacion}</p>
             </div>
             <div className="bg-green-50 rounded-xl p-4 border border-green-100">
               <p className="text-xs text-green-600 uppercase tracking-wide mb-1">Resueltos</p>
@@ -162,7 +171,7 @@ export default function MisTicketsPage() {
               ))}
             </select>
             <button
-              onClick={fetchTickets}
+              onClick={() => { fetchTickets(); fetchStats(); }}
               className="p-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
               title="Actualizar"
             >
@@ -239,7 +248,7 @@ export default function MisTicketsPage() {
         <PortalCreateTicketModal
           user={user!}
           onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); fetchTickets(); }}
+          onCreated={() => { setShowCreate(false); fetchTickets(); fetchStats(); }}
         />
       )}
     </div>
