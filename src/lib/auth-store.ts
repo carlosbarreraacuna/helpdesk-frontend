@@ -19,6 +19,24 @@ export interface AuthUser {
   };
   is_active: boolean;
   effective_permissions?: string[];
+  password_expires_at?: string | null;
+}
+
+// Special errors thrown by login() to signal 2FA redirects
+export class TwoFactorRequired extends Error {
+  constructor(public challengeToken: string) {
+    super('REQUIRES_2FA');
+  }
+}
+export class TwoFactorSetupRequired extends Error {
+  constructor(public setupToken: string) {
+    super('REQUIRES_2FA_SETUP');
+  }
+}
+export class PasswordExpired extends Error {
+  constructor() {
+    super('PASSWORD_EXPIRED');
+  }
 }
 
 interface AuthState {
@@ -42,51 +60,58 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   loading: true,
 
   setAuth: (token: string, user: AuthUser) => {
-    // Access token lives in sessionStorage (cleared on tab/browser close)
-    // and in Zustand memory for synchronous reads within the same session.
     sessionStorage.setItem('access_token', token);
     set({ token, user, isAuthenticated: true });
   },
 
   clearAuth: () => {
     sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('2fa_challenge_token');
+    sessionStorage.removeItem('2fa_setup_token');
     set({ token: null, user: null, isAuthenticated: false });
   },
 
   updateUser: (user: AuthUser) => set({ user }),
 
   login: async (login: string, password: string) => {
-    // Response sets httpOnly refresh cookie automatically
     const { data } = await api.post('/auth/login', { login, password });
+
+    if (data.requires_2fa) {
+      sessionStorage.setItem('2fa_challenge_token', data.challenge_token);
+      throw new TwoFactorRequired(data.challenge_token);
+    }
+
+    if (data.requires_2fa_setup) {
+      sessionStorage.setItem('2fa_setup_token', data.setup_token);
+      throw new TwoFactorSetupRequired(data.setup_token);
+    }
+
     sessionStorage.setItem('access_token', data.token);
     set({ token: data.token, user: data.user, isAuthenticated: true });
   },
 
   logout: async () => {
     try {
-      // Sends httpOnly cookie to server for revocation
       await api.post('/auth/logout');
     } catch {
       // Ignore network errors during logout
     } finally {
       sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('2fa_challenge_token');
+      sessionStorage.removeItem('2fa_setup_token');
       set({ token: null, user: null, isAuthenticated: false });
     }
   },
 
   checkAuth: async () => {
     set({ loading: true });
-
-    // On page load: try to use existing access token or refresh silently
     const existingToken = sessionStorage.getItem('access_token') ?? get().token;
 
     try {
       if (existingToken) {
-        // Validate existing token
         const { data } = await api.get('/auth/me');
         set({ user: data, token: existingToken, isAuthenticated: true });
       } else {
-        // No access token — try silent refresh via httpOnly cookie
         const { data } = await api.post('/auth/refresh');
         sessionStorage.setItem('access_token', data.token);
         set({ token: data.token, user: data.user, isAuthenticated: true });

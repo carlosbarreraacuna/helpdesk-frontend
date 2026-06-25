@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore, TwoFactorRequired, TwoFactorSetupRequired } from '@/lib/auth-store';
 import gsap from 'gsap';
 
 const loginSchema = z.object({
@@ -159,6 +159,16 @@ export default function LoginPage() {
       showToast('Acceso autorizado. Redirigiendo…');
       setTimeout(() => router.push(user?.role?.name === 'usuario' ? '/portal/mis-tickets' : '/dashboard'), 800);
     } catch (err: unknown) {
+      if (err instanceof TwoFactorRequired) {
+        showToast('Verificación en 2 pasos requerida…');
+        setTimeout(() => router.push('/two-factor'), 700);
+        return;
+      }
+      if (err instanceof TwoFactorSetupRequired) {
+        showToast('Configura tu verificador en 2 pasos…');
+        setTimeout(() => router.push('/two-factor/setup'), 700);
+        return;
+      }
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Credenciales incorrectas';
       setError(msg);
       gsap.fromTo(btnRef.current, { x: -8 }, { x: 0, duration: .55, ease: 'elastic.out(1.2,.35)' });
