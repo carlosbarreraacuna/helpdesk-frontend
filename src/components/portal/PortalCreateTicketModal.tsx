@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Headphones, AlertCircle, CheckCircle2, Upload, Sparkles } from 'lucide-react';
+import { X, Headphones, AlertCircle, CheckCircle2, Upload, Sparkles, Paperclip, FileText } from 'lucide-react';
 import { AuthUser } from '@/lib/auth-store';
 
 interface TicketCategory { id: number; name: string }
@@ -34,7 +34,8 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<{ ticketNumber: string; category: string | null; assignedAgent: string | null } | null>(null);
-  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState('');
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState<{ priority: string; category_id: number | null; reason: string } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -87,7 +88,7 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
       form.append('priority', data.priority);
       form.append('created_by_user_id', String(user.id));
       if (data.category_id) form.append('category_id', data.category_id);
-      if (attachment) form.append('attachment', attachment);
+      attachments.forEach(f => form.append('attachments[]', f));
 
       const res = await api.post('/portal/tickets', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -217,22 +218,52 @@ export default function PortalCreateTicketModal({ user, onClose, onCreated }: Pr
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Adjunto (opcional)</Label>
+              <Label className="text-sm font-medium">Adjuntos (opcional)</Label>
               <label className="flex items-center gap-3 border border-dashed border-gray-300 rounded-xl p-3 cursor-pointer hover:border-primary/50 transition-colors">
-                <Upload className="w-4 h-4 text-gray-400" />
+                <Upload className="w-4 h-4 text-gray-400 shrink-0" />
                 <span className="text-sm text-gray-500">
-                  {attachment ? attachment.name : 'Seleccionar imagen (PNG, JPG, máx 5MB)'}
+                  {attachments.length > 0
+                    ? `${attachments.length} archivo${attachments.length > 1 ? 's' : ''} seleccionado${attachments.length > 1 ? 's' : ''}`
+                    : 'Seleccionar documentos (PDF, Word, Excel, imágenes — máx 40 MB en total)'}
                 </span>
                 <input
                   type="file"
-                  accept="image/*"
+                  multiple
                   className="hidden"
                   onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f && f.size <= 5 * 1024 * 1024) setAttachment(f);
+                    setAttachmentError('');
+                    const incoming = Array.from(e.target.files ?? []);
+                    const currentTotal = attachments.reduce((s, f) => s + f.size, 0);
+                    const newTotal = incoming.reduce((s, f) => s + f.size, 0);
+                    if (currentTotal + newTotal > 40 * 1024 * 1024) {
+                      setAttachmentError(`El total de archivos no puede superar 40 MB (llevas ${(currentTotal / (1024 * 1024)).toFixed(1)} MB)`);
+                      e.target.value = '';
+                      return;
+                    }
+                    setAttachments(prev => [...prev, ...incoming]);
+                    e.target.value = '';
                   }}
                 />
               </label>
+              {attachmentError && (
+                <p className="text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />{attachmentError}
+                </p>
+              )}
+              {attachments.length > 0 && (
+                <ul className="space-y-1 mt-1">
+                  {attachments.map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5">
+                      {f.type.startsWith('image/') ? <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" /> : <Paperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                      <span className="truncate flex-1">{f.name}</span>
+                      <span className="text-gray-400 shrink-0">{(f.size / (1024 * 1024)).toFixed(1)} MB</span>
+                      <button type="button" onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-500 transition shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Sugerencia IA */}

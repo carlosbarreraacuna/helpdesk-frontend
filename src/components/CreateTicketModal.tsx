@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertCircle, Upload, X, CheckCircle2, BookOpen, ExternalLink } from 'lucide-react';
+import { AlertCircle, Upload, X, CheckCircle2, BookOpen, ExternalLink, Paperclip, FileText } from 'lucide-react';
 import api from '@/lib/api';
 import { kbApi, KbSuggestion } from '@/lib/kb-api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -37,8 +37,8 @@ interface CreateTicketModalProps {
 export default function CreateTicketModal({ isOpen, onClose, onSuccess }: CreateTicketModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [attachment, setAttachment] = useState<File | null>(null);
-  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState('');
   const [kbSuggestions, setKbSuggestions] = useState<KbSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
@@ -124,32 +124,22 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   }, [description]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        setError('Solo se permiten archivos de imagen');
-        return;
-      }
-      
-      if (file.size > 5 * 1024 * 1024) {
-        setError('El archivo no puede ser mayor a 5MB');
-        return;
-      }
-      
-      setAttachment(file);
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAttachmentPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    setAttachmentError('');
+    const incoming = Array.from(e.target.files ?? []);
+    const currentTotal = attachments.reduce((s, f) => s + f.size, 0);
+    const newTotal = incoming.reduce((s, f) => s + f.size, 0);
+    if (currentTotal + newTotal > 40 * 1024 * 1024) {
+      setAttachmentError(`El total de archivos no puede superar 40 MB (llevas ${(currentTotal / (1024 * 1024)).toFixed(1)} MB)`);
+      e.target.value = '';
+      return;
     }
+    setAttachments(prev => [...prev, ...incoming]);
+    e.target.value = '';
   };
 
-  const removeAttachment = () => {
-    setAttachment(null);
-    setAttachmentPreview(null);
-    setError('');
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setAttachmentError('');
   };
 
   const onSubmit = async (data: CreateTicketFormData) => {
@@ -164,10 +154,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
       formData.append('description', data.description);
       formData.append('priority', data.priority);
       if (data.category_id) formData.append('category_id', data.category_id);
-
-      if (attachment) {
-        formData.append('attachment', attachment);
-      }
+      attachments.forEach(f => formData.append('attachments[]', f));
 
       const response = await api.post('/portal/tickets', formData, {
         headers: {
@@ -177,8 +164,7 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
       
       onSuccess(response.data.ticket_number);
       reset();
-      setAttachment(null);
-      setAttachmentPreview(null);
+      setAttachments([]);
       onClose();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al crear el ticket');
@@ -190,8 +176,8 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
   const handleClose = () => {
     if (!isLoading) {
       reset();
-      setAttachment(null);
-      setAttachmentPreview(null);
+      setAttachments([]);
+      setAttachmentError('');
       setError('');
       onClose();
     }
@@ -364,61 +350,40 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }: Create
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="attachment">Adjuntar Imagen (Opcional)</Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary/50 transition-colors">
-              {attachmentPreview ? (
-                <div className="space-y-3">
-                  <div className="relative">
-                    <img 
-                      src={attachmentPreview} 
-                      alt="Preview" 
-                      className="mx-auto max-h-32 rounded-lg shadow-md"
-                    />
-                    <button
-                      type="button"
-                      onClick={removeAttachment}
-                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                    >
-                      <X className="w-3 h-3" />
+            <Label htmlFor="attachment">Adjuntos (Opcional)</Label>
+            <label htmlFor="attachment" className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors">
+              <Upload className="w-5 h-5 text-gray-400 shrink-0" />
+              <div>
+                <span className="text-sm text-primary font-medium">Seleccionar documentos</span>
+                <p className="text-xs text-gray-500 mt-0.5">PDF, Word, Excel, imágenes — máx 40 MB en total</p>
+              </div>
+              <input
+                id="attachment"
+                type="file"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+            {attachmentError && (
+              <p className="text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4 shrink-0" />{attachmentError}
+              </p>
+            )}
+            {attachments.length > 0 && (
+              <ul className="space-y-1.5 mt-1">
+                {attachments.map((f, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    {f.type.startsWith('image/') ? <FileText className="w-3.5 h-3.5 text-blue-400 shrink-0" /> : <Paperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                    <span className="truncate flex-1">{f.name}</span>
+                    <span className="text-gray-400 shrink-0">{(f.size / (1024 * 1024)).toFixed(1)} MB</span>
+                    <button type="button" onClick={() => removeAttachment(i)} className="text-gray-300 hover:text-red-500 transition shrink-0">
+                      <X className="w-3.5 h-3.5" />
                     </button>
-                  </div>
-                  <div className="flex justify-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={removeAttachment}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      Eliminar Imagen
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                    <Upload className="w-6 h-6 text-gray-400" />
-                  </div>
-                  <div>
-                    <label htmlFor="attachment" className="cursor-pointer">
-                      <span className="text-primary hover:text-primary/80 font-medium">
-                        Seleccionar imagen
-                      </span>
-                      <input
-                        id="attachment"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                    </label>
-                    <p className="text-xs text-gray-500 mt-1">
-                      PNG, JPG, GIF hasta 5MB
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {error && (

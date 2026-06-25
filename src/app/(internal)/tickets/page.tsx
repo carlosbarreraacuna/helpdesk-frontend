@@ -391,6 +391,7 @@ export default function TicketsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50/50">
+                    <TableHead className="py-2 px-3 w-10" />
                     <TableHead className="py-2 px-3 text-xs font-medium">Código</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium">Solicitante</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium hidden sm:table-cell">Asunto</TableHead>
@@ -401,7 +402,6 @@ export default function TicketsPage() {
                     <TableHead className="py-2 px-3 text-xs font-medium hidden xl:table-cell">SLA Grupo</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium hidden lg:table-cell">Área</TableHead>
                     <TableHead className="py-2 px-3 text-xs font-medium hidden md:table-cell">Fecha</TableHead>
-                    <TableHead className="py-2 px-3 text-xs font-medium text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -414,6 +414,16 @@ export default function TicketsPage() {
                           : 'hover:bg-gray-50/50'
                       }`}
                     >
+                      <TableCell className="py-2 px-3 w-10">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/tickets/${ticket.id}`)}
+                          className="h-7 w-7 p-0"
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
                       <TableCell className="py-2 px-3">
                         <div className="flex items-center gap-1.5">
                           {!ticket.is_read && (
@@ -488,16 +498,6 @@ export default function TicketsPage() {
                             year: '2-digit'
                           })}
                         </span>
-                      </TableCell>
-                      <TableCell className="py-2 px-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/tickets/${ticket.id}`)}
-                          className="h-7 w-7 p-0"
-                        >
-                          <Eye className="h-3 w-3" />
-                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

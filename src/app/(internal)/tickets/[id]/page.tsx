@@ -1140,26 +1140,6 @@ const [imageModal, setImageModal] = useState<string | null>(null);
               </button>
             </div>
 
-            {/* ── Metadata strip ─────────────────────── */}
-            <div className="px-4 py-3 bg-gray-50 border-b grid grid-cols-2 gap-x-4 gap-y-1.5">
-              <div>
-                <p className="text-xs text-gray-400 mb-0.5">Código</p>
-                <p className="text-xs font-mono font-semibold text-gray-700">{ticket.verification_code}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 mb-0.5">Comentarios</p>
-                <p className="text-xs font-semibold text-gray-700">{comments.length}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 mb-0.5">Creado</p>
-                <p className="text-xs text-gray-600">{new Date(ticket.created_at).toLocaleDateString('es')}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400 mb-0.5">Actualizado</p>
-                <p className="text-xs text-gray-600">{new Date(ticket.updated_at).toLocaleDateString('es')}</p>
-              </div>
-            </div>
-
             <div className="p-4 space-y-5 flex-1">
 
               {/* ── Asignación ─────────────────────────── */}
@@ -1437,6 +1417,9 @@ const [imageModal, setImageModal] = useState<string | null>(null);
         <TicketTraceabilityDrawer
           ticketId={ticket.id}
           ticketNumber={ticket.ticket_number}
+          verificationCode={ticket.verification_code}
+          commentsCount={comments.length}
+          updatedAt={ticket.updated_at}
           onClose={() => setShowTraceability(false)}
         />
       )}
