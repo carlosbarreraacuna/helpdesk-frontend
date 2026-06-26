@@ -204,15 +204,14 @@ function UserTwoFactorTable() {
               <tr>
                 <th className="px-4 py-3 text-left">Usuario</th>
                 <th className="px-4 py-3 text-left">Rol</th>
-                <th className="px-4 py-3 text-center">Estado 2FA</th>
+                <th className="px-4 py-3 text-center">2FA activo</th>
                 <th className="px-4 py-3 text-left">Configurado</th>
-                <th className="px-4 py-3 text-center">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-gray-400">No se encontraron usuarios</td>
+                  <td colSpan={4} className="text-center py-8 text-gray-400">No se encontraron usuarios</td>
                 </tr>
               )}
               {filtered.map(user => (
@@ -228,13 +227,15 @@ function UserTwoFactorTable() {
                   </td>
                   <td className="px-4 py-3 text-gray-500">{user.role?.display_name ?? '—'}</td>
                   <td className="px-4 py-3 text-center">
-                    {user.two_factor_enabled
-                      ? <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs rounded-full px-2.5 py-0.5 font-medium">
-                          <ShieldCheck className="w-3.5 h-3.5" /> Activo
-                        </span>
-                      : <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-xs rounded-full px-2.5 py-0.5">
-                          <ShieldOff className="w-3.5 h-3.5" /> Inactivo
-                        </span>}
+                    {toggling === user.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400 mx-auto" />
+                    ) : (
+                      <Switch
+                        checked={user.two_factor_enabled}
+                        onCheckedChange={() => handleToggle(user)}
+                        disabled={currentUser?.id === user.id || !user.two_factor_enabled || toggling !== null}
+                      />
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">
                     {user.two_factor_confirmed_at
@@ -242,24 +243,6 @@ function UserTwoFactorTable() {
                           day: '2-digit', month: 'short', year: 'numeric',
                         })
                       : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {currentUser?.id === user.id ? (
-                      <span className="text-xs text-gray-300">—</span>
-                    ) : toggling === user.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-gray-400 mx-auto" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1">
-                        <Switch
-                          checked={user.two_factor_enabled}
-                          onCheckedChange={() => handleToggle(user)}
-                          disabled={!user.two_factor_enabled || toggling !== null}
-                        />
-                        {!user.two_factor_enabled && (
-                          <span className="text-[10px] text-gray-400">usuario configura</span>
-                        )}
-                      </div>
-                    )}
                   </td>
                 </tr>
               ))}
