@@ -29,54 +29,151 @@ export function Topbar({ sidebarOpen = true, onToggleSidebar }: TopbarProps) {
   useEffect(() => setMounted(true), []);
 
   // Configuración del breadcrumb
-  const breadcrumbConfig = {
+  const breadcrumbConfig: Record<string, { title: string; subtitle: string }> = {
+    // Dashboard
     '/dashboard': {
       title: 'Dashboard',
-      subtitle: 'Resumen general del sistema de tickets'
+      subtitle: 'Resumen general del sistema de tickets',
     },
+    // Tickets
     '/tickets': {
       title: 'Gestión de Tickets',
-      subtitle: 'Administra los tickets de soporte'
+      subtitle: 'Administra los tickets de soporte',
     },
+    // Reportes
     '/reports': {
       title: 'Reportes e Indicadores',
-      subtitle: 'Dashboard de métricas y estadísticas - Administrador'
+      subtitle: 'Métricas y estadísticas del sistema',
     },
+    // Reuniones
+    '/meetings': {
+      title: 'Reuniones y Videollamadas',
+      subtitle: 'Gestiona las reuniones con usuarios',
+    },
+    // Base de conocimiento
+    '/knowledge-base': {
+      title: 'Base de Conocimiento',
+      subtitle: 'Artículos y documentación del equipo',
+    },
+    '/knowledge-base/manage': {
+      title: 'Gestión de Conocimiento',
+      subtitle: 'Administra categorías, etiquetas y artículos',
+    },
+    '/knowledge-base/new': {
+      title: 'Nuevo Artículo',
+      subtitle: 'Crea un nuevo artículo en la base de conocimiento',
+    },
+    // Inventario
+    '/inventory/assets': {
+      title: 'Inventario de Activos',
+      subtitle: 'Gestiona los activos tecnológicos de la organización',
+    },
+    '/inventory/assets/new': {
+      title: 'Nuevo Activo',
+      subtitle: 'Registra un nuevo activo en el inventario',
+    },
+    '/inventory/maintenances': {
+      title: 'Mantenimientos',
+      subtitle: 'Gestiona los mantenimientos de activos',
+    },
+    '/inventory/maintenances/new': {
+      title: 'Nuevo Mantenimiento',
+      subtitle: 'Registra un nuevo mantenimiento',
+    },
+    '/inventory/manage': {
+      title: 'Administración de Inventario',
+      subtitle: 'Gestiona tipos de activos, ubicaciones y proveedores',
+    },
+    // Configuración personal
+    '/settings/security': {
+      title: 'Seguridad de la cuenta',
+      subtitle: 'Gestiona la autenticación y la contraseña de tu cuenta',
+    },
+    '/settings/integrations': {
+      title: 'Integraciones',
+      subtitle: 'Configura las integraciones con servicios externos',
+    },
+    // Administración
     '/admin/users': {
       title: 'Gestión de Usuarios',
-      subtitle: 'Administra los usuarios del sistema'
+      subtitle: 'Administra los usuarios del sistema',
     },
     '/admin/roles-permissions': {
-      title: 'Gestión de Roles y Permisos',
-      subtitle: 'Administra los roles y permisos del sistema'
+      title: 'Roles y Permisos',
+      subtitle: 'Administra los roles y permisos del sistema',
     },
     '/admin/areas': {
       title: 'Gestión de Áreas',
-      subtitle: 'Administra las áreas del sistema'
+      subtitle: 'Administra las áreas del sistema',
+    },
+    '/admin/grupos': {
+      title: 'Grupos de Trabajo',
+      subtitle: 'Administra los grupos y reglas de asignación automática',
     },
     '/admin/menu': {
       title: 'Configuración del Menú',
-      subtitle: 'Gestiona los items del sidebar y asigna por rol'
-    }
+      subtitle: 'Gestiona los ítems del sidebar y asígnalos por rol',
+    },
+    '/admin/email-channels': {
+      title: 'Canales de Email',
+      subtitle: 'Configura las cuentas de correo del sistema',
+    },
+    '/admin/sla': {
+      title: 'Configuración de SLA',
+      subtitle: 'Define los tiempos de respuesta y resolución por prioridad',
+    },
+    '/admin/sla-reportes': {
+      title: 'Reportes de SLA',
+      subtitle: 'Análisis de cumplimiento de niveles de servicio',
+    },
+    '/admin/reports-config': {
+      title: 'Configuración de Reportes',
+      subtitle: 'Gestiona las plantillas de reportes por rol',
+    },
+    '/admin/audit-log': {
+      title: 'Registro de Auditoría',
+      subtitle: 'Historial de actividad y cambios del sistema',
+    },
+    '/admin/backups': {
+      title: 'Copias de Seguridad',
+      subtitle: 'Gestiona las copias de seguridad del sistema',
+    },
+    '/admin/security': {
+      title: 'Seguridad del sistema',
+      subtitle: 'Configuración global de autenticación para todos los usuarios',
+    },
   };
 
   // Obtener la información del breadcrumb actual
   const getCurrentBreadcrumb = () => {
-    // Buscar coincidencia exacta primero
-    if (breadcrumbConfig[pathname as keyof typeof breadcrumbConfig]) {
-      return breadcrumbConfig[pathname as keyof typeof breadcrumbConfig];
+    if (breadcrumbConfig[pathname]) {
+      return breadcrumbConfig[pathname];
     }
-    
-    // Buscar coincidencias parciales para rutas dinámicas
     if (pathname.startsWith('/tickets/')) {
-      return breadcrumbConfig['/tickets'];
+      return { title: 'Detalle de Ticket', subtitle: 'Información y seguimiento del ticket' };
     }
-    
-    // Valor por defecto
-    return {
-      title: 'Dashboard',
-      subtitle: 'Resumen general del sistema de tickets'
-    };
+    if (pathname.startsWith('/knowledge-base/') && pathname.endsWith('/edit')) {
+      return { title: 'Editar Artículo', subtitle: 'Modifica el artículo de la base de conocimiento' };
+    }
+    if (pathname.startsWith('/knowledge-base/')) {
+      return { title: 'Artículo', subtitle: 'Contenido de la base de conocimiento' };
+    }
+    if (pathname.startsWith('/inventory/assets/') && pathname.endsWith('/edit')) {
+      return { title: 'Editar Activo', subtitle: 'Modifica la información del activo' };
+    }
+    if (pathname.startsWith('/inventory/assets/')) {
+      return { title: 'Detalle de Activo', subtitle: 'Información y estado del activo' };
+    }
+    if (pathname.startsWith('/inventory/maintenances/')) {
+      return { title: 'Detalle de Mantenimiento', subtitle: 'Información del mantenimiento' };
+    }
+    if (pathname.startsWith('/inventory/profile/')) {
+      return { title: 'Perfil Tecnológico', subtitle: 'Activos y software asignados al usuario' };
+    }
+    if (pathname.startsWith('/admin/user-permissions/')) {
+      return { title: 'Permisos de Usuario', subtitle: 'Gestiona los permisos especiales del usuario' };
+    }
+    return { title: 'Dashboard', subtitle: 'Resumen general del sistema de tickets' };
   };
 
   const currentBreadcrumb = getCurrentBreadcrumb();
