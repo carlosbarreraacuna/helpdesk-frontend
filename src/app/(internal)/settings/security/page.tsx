@@ -32,20 +32,24 @@ function daysUntil(iso: string | null | undefined) {
 function TwoFactorSection() {
   const user = useAuthStore(s => s.user);
 
-  const [enabled,     setEnabled]     = useState<boolean | null>(null);
-  const [step,        setStep]        = useState<'idle' | 'qr' | 'confirm' | 'disable'>('idle');
-  const [qrUri,       setQrUri]       = useState('');
-  const [secret,      setSecret]      = useState('');
-  const [code,        setCode]        = useState('');
-  const [password,    setPassword]    = useState('');
-  const [error,       setError]       = useState('');
-  const [success,     setSuccess]     = useState('');
-  const [loading,     setLoading]     = useState(false);
-  const [copied,      setCopied]      = useState(false);
-  const [showDisPass, setShowDisPass] = useState(false);
+  const [enabled,           setEnabled]           = useState<boolean | null>(null);
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [step,              setStep]              = useState<'idle' | 'qr' | 'confirm' | 'disable'>('idle');
+  const [qrUri,             setQrUri]             = useState('');
+  const [secret,            setSecret]            = useState('');
+  const [code,              setCode]              = useState('');
+  const [password,          setPassword]          = useState('');
+  const [error,             setError]             = useState('');
+  const [success,           setSuccess]           = useState('');
+  const [loading,           setLoading]           = useState(false);
+  const [copied,            setCopied]            = useState(false);
+  const [showDisPass,       setShowDisPass]       = useState(false);
 
   useEffect(() => {
     api.get('/auth/two-factor').then(({ data }) => setEnabled(data.enabled));
+    api.get('/admin/settings/security')
+      .then(({ data }) => setTwoFactorRequired(data.two_factor_required))
+      .catch(() => {/* no permission — ignore */});
   }, []);
 
   const startSetup = async () => {
@@ -127,10 +131,10 @@ function TwoFactorSection() {
         )}
       </div>
 
-      {isAdmin && !enabled && (
+      {isAdmin && !enabled && twoFactorRequired && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>Tu rol requiere 2FA activo por política de seguridad MSPI.</span>
+          <span>Tu rol requiere 2FA activo. El administrador del sistema lo ha establecido como obligatorio.</span>
         </div>
       )}
 
