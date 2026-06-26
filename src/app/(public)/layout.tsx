@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Menu, X, LayoutDashboard, Ticket, Package, BookOpen, LogOut } from "lucide-react"
+import { Menu, X, Ticket, Package, BookOpen, LogOut, ShieldCheck, ChevronDown } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -14,12 +14,24 @@ export default function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen,       setIsOpen]       = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const router = useRouter()
   const user = useAuthStore(s => s.user)
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
   const logout = useAuthStore(s => s.logout)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const isFuncionario = isAuthenticated && user?.role?.name === 'usuario'
 
@@ -90,18 +102,39 @@ export default function PublicLayout({
                       </Link>
                     )
                   })}
-                  <div className="flex items-center gap-2 ml-2 pl-4 border-l border-border">
-                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                      {user?.name?.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="text-sm font-medium text-foreground/80 max-w-30 truncate">{user?.name}</span>
+                  {/* User dropdown */}
+                  <div ref={userMenuRef} className="relative ml-2 pl-4 border-l border-border">
                     <button
-                      onClick={handleLogout}
-                      className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
-                      title="Cerrar sesión"
+                      onClick={() => setUserMenuOpen(v => !v)}
+                      className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                     >
-                      <LogOut className="w-4 h-4" />
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium text-foreground/80 max-w-[120px] truncate">{user?.name}</span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
+
+                    {userMenuOpen && (
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50">
+                        <Link
+                          href="/portal/seguridad"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-gray-400" />
+                          Seguridad
+                        </Link>
+                        <div className="border-t border-gray-100 my-1" />
+                        <button
+                          onClick={() => { setUserMenuOpen(false); handleLogout(); }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Cerrar sesión
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
@@ -146,10 +179,17 @@ export default function PublicLayout({
                       </Link>
                     )
                   })}
-                  <div className="pt-2 border-t border-border flex items-center justify-between px-2">
-                    <span className="text-sm text-muted-foreground">{user?.name}</span>
-                    <button onClick={handleLogout} className="text-sm text-destructive flex items-center gap-1">
-                      <LogOut className="w-4 h-4" /> Salir
+                  <div className="pt-2 border-t border-border space-y-1 px-2">
+                    <span className="block text-xs text-muted-foreground px-1 pb-1">{user?.name}</span>
+                    <Link
+                      href="/portal/seguridad"
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2 py-2 px-1 text-sm text-gray-700 hover:text-primary transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4" /> Seguridad
+                    </Link>
+                    <button onClick={handleLogout} className="flex items-center gap-2 py-2 px-1 text-sm text-destructive w-full">
+                      <LogOut className="w-4 h-4" /> Cerrar sesión
                     </button>
                   </div>
                 </>
