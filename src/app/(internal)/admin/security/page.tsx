@@ -273,7 +273,7 @@ function UserTwoFactorTable() {
 
 export default function AdminSecurityPage() {
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       <GlobalToggleCard />
       <UserTwoFactorTable />
     </div>
