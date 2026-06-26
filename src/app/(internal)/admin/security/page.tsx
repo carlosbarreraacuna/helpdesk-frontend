@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import {
   Shield, ShieldCheck, ShieldOff, Loader2,
-  CheckCircle2, AlertCircle, Users, ShieldX,
+  CheckCircle2, AlertCircle, Users,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useAuthStore } from '@/lib/auth-store';
@@ -121,21 +121,22 @@ function GlobalToggleCard() {
 
 function UserTwoFactorTable() {
   const currentUser = useAuthStore(s => s.user);
-  const [users,      setUsers]      = useState<UserRow[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [search,     setSearch]     = useState('');
-  const [disabling,  setDisabling]  = useState<number | null>(null);
-  const [feedback,   setFeedback]   = useState<{ id: number; msg: string; ok: boolean } | null>(null);
+  const [users,    setUsers]    = useState<UserRow[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState('');
+  const [toggling, setToggling] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ id: number; msg: string; ok: boolean } | null>(null);
 
   useEffect(() => {
-    api.get('/users', { params: { roles: ['admin', 'supervisor', 'agente'], per_page: 200 } })
+    api.get('/users', { params: { per_page: 200 } })
       .then(({ data }) => setUsers(data.data ?? []))
       .finally(() => setLoading(false));
   }, []);
 
-  const handleDisable = async (user: UserRow) => {
+  const handleToggle = async (user: UserRow) => {
+    if (!user.two_factor_enabled) return; // solo el usuario puede activarlo desde su perfil
     if (!confirm(`¿Desactivar el 2FA de ${user.name}? Tendrá que volver a configurarlo.`)) return;
-    setDisabling(user.id); setFeedback(null);
+    setToggling(user.id); setFeedback(null);
     try {
       const { data } = await api.delete(`/admin/settings/security/users/${user.id}/two-factor`);
       setUsers(prev => prev.map(u => u.id === user.id
@@ -147,7 +148,7 @@ function UserTwoFactorTable() {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al desactivar';
       setFeedback({ id: user.id, msg, ok: false });
     } finally {
-      setDisabling(null);
+      setToggling(null);
     }
   };
 
@@ -243,20 +244,21 @@ function UserTwoFactorTable() {
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {user.two_factor_enabled && currentUser?.id !== user.id ? (
-                      <button
-                        onClick={() => handleDisable(user)}
-                        disabled={disabling === user.id}
-                        title="Desactivar 2FA"
-                        className="inline-flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 border border-red-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {disabling === user.id
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : <ShieldX className="w-3.5 h-3.5" />}
-                        Desactivar
-                      </button>
+                    {currentUser?.id === user.id ? (
+                      <span className="text-xs text-gray-300">—</span>
+                    ) : toggling === user.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400 mx-auto" />
                     ) : (
-                      <span className="text-gray-300 text-xs">—</span>
+                      <div className="flex flex-col items-center gap-1">
+                        <Switch
+                          checked={user.two_factor_enabled}
+                          onCheckedChange={() => handleToggle(user)}
+                          disabled={!user.two_factor_enabled || toggling !== null}
+                        />
+                        {!user.two_factor_enabled && (
+                          <span className="text-[10px] text-gray-400">usuario configura</span>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
